@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FB Ads Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #8b5cf6;
+            --primary-light: #a78bfa;
+            --primary-dark: #7c3aed;
+            --accent: #c084fc;
+            --accent-pink: #f472b6;
+            --accent-blue: #60a5fa;
+            
+            --bg-dark: #0f0f1a;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-glass: rgba(255, 255, 255, 0.05);
+            --bg-glass-hover: rgba(255, 255, 255, 0.08);
+            
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-muted: rgba(255, 255, 255, 0.4);
+            
+            --border-glass: rgba(255, 255, 255, 0.1);
+            --border-glow: rgba(139, 92, 246, 0.5);
+            
+            --success: #34d399;
+            --warning: #fbbf24;
+            --danger: #f87171;
+            
+            --shadow-glow: 0 0 60px rgba(139, 92, 246, 0.3);
+            --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated Background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .bg-gradient::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(244, 114, 182, 0.1) 0%, transparent 40%),
+                radial-gradient(circle at 40% 60%, rgba(96, 165, 250, 0.08) 0%, transparent 30%);
+            animation: bgFloat 20s ease-in-out infinite;
+        }
+
+        @keyframes bgFloat {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(2%, 2%) rotate(1deg); }
+            66% { transform: translate(-1%, 1%) rotate(-1deg); }
+        }
+
+        /* Floating Orbs */
+        .orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.5;
+            animation: orbFloat 15s ease-in-out infinite;
+            z-index: -1;
+        }
+
+        .orb-1 {
+            width: 400px;
+            height: 400px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent-pink) 100%);
+            top: -100px;
+            right: -100px;
+            animation-delay: 0s;
+        }
+
+        .orb-2 {
+            width: 300px;
+            height: 300px;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--primary) 100%);
+            bottom: -50px;
+            left: -50px;
+            animation-delay: -5s;
+        }
+
+        .orb-3 {
+            width: 200px;
+            height: 200px;
+            background: linear-gradient(135deg, var(--accent-pink) 0%, var(--accent) 100%);
+            top: 50%;
+            left: 50%;
+            animation-delay: -10s;
+        }
+
+        @keyframes orbFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(30px, -30px) scale(1.05); }
+            50% { transform: translate(-20px, 20px) scale(0.95); }
+            75% { transform: translate(20px, 10px) scale(1.02); }
+        }
+
+        /* Glass Card */
+        .glass {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass:hover {
+            background: var(--bg-glass-hover);
+            border-color: var(--border-glow);
+            box-shadow: var(--shadow-glow);
+        }
+
+        /* Container */
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.5rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent-pink) 100%);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
+            animation: logoGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes logoGlow {
+            0%, 100% { box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4); }
+            50% { box-shadow: 0 8px 48px rgba(139, 92, 246, 0.6); }
+        }
+
+        .logo-text h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo-text span {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        /* Auth Section */
+        .auth-section {
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .auth-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .auth-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, var(--primary) 0%, var(--accent-pink) 100%);
+            border-radius: 2px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 0.8fr auto;
+            gap: 1.25rem;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 1rem 1.25rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-glass);
+            border-radius: 14px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: var(--primary);
+            background: rgba(139, 92, 246, 0.05);
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .form-group select option {
+            background: var(--bg-dark);
+            color: var(--text-primary);
+        }
+
+        /* Button */
+        .btn {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 14px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: 'Inter', sans-serif;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            box-shadow: 0 4px 24px rgba(139, 92, 246, 0.4);
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(139, 92, 246, 0.5);
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-secondary {
+            background: var(--bg-glass);
+            color: var(--text-primary);
+            border: 1px solid var(--border-glass);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-glass-hover);
+            border-color: var(--primary);
+        }
+
+        /* Stats Grid */
+        .stats-section {
+            margin-bottom: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 1.25rem;
+        }
+
+        .stat-card {
+            padding: 1.5rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--accent-pink));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 1rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(244, 114, 182, 0.2) 100%);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-change {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+        }
+
+        .stat-change.positive {
+            color: var(--success);
+            background: rgba(52, 211, 153, 0.1);
+        }
+
+        .stat-change.negative {
+            color: var(--danger);
+            background: rgba(248, 113, 113, 0.1);
+        }
+
+        /* Table Section */
+        .table-section {
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(180deg, var(--primary) 0%, var(--accent-pink) 100%);
+            border-radius: 2px;
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn-export {
+            padding: 0.75rem 1.25rem;
+            font-size: 0.85rem;
+        }
+
+        /* Data Table */
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 16px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .data-table th {
+            padding: 1rem;
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            background: rgba(139, 92, 246, 0.1);
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        .data-table th:first-child {
+            text-align: left;
+            padding-left: 1.5rem;
+            border-radius: 12px 0 0 0;
+        }
+
+        .data-table th:last-child {
+            border-radius: 0 12px 0 0;
+        }
+
+        .data-table td {
+            padding: 1rem;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            transition: all 0.2s ease;
+        }
+
+        .data-table td:first-child {
+            text-align: left;
+            padding-left: 1.5rem;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .data-table tbody tr {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .data-table tbody tr:hover {
+            background: rgba(139, 92, 246, 0.05);
+        }
+
+        .data-table tbody tr:hover td {
+            color: var(--text-primary);
+        }
+
+        .data-table tbody tr:hover td:first-child {
+            color: var(--primary-light);
+        }
+
+        .data-table tfoot td {
+            padding: 1.25rem 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            background: rgba(139, 92, 246, 0.15);
+            border-top: 2px solid var(--primary);
+        }
+
+        .data-table tfoot td:first-child {
+            border-radius: 0 0 0 12px;
+        }
+
+        .data-table tfoot td:last-child {
+            border-radius: 0 0 12px 0;
+        }
+
+        /* Value Highlights */
+        .value-highlight {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+        }
+
+        .value-currency {
+            color: var(--success);
+        }
+
+        .value-leads {
+            color: var(--accent);
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 6rem 2rem;
+            gap: 1.5rem;
+        }
+
+        .loading.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 56px;
+            height: 56px;
+            border: 3px solid var(--border-glass);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 1rem;
+            color: var(--text-secondary);
+        }
+
+        /* Error */
+        .error-message {
+            display: none;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1.5rem;
+            border-radius: 16px;
+            background: rgba(248, 113, 113, 0.1);
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            color: var(--danger);
+            font-weight: 500;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        .dashboard-content {
+            display: none;
+        }
+
+        .dashboard-content.active {
+            display: block;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-dark);
+            border: 1px solid var(--border-glass);
+            border-radius: 28px;
+            width: 100%;
+            max-width: 1500px;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: var(--shadow-glow), var(--shadow-card);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border-glass);
+            background: rgba(139, 92, 246, 0.05);
+        }
+
+        .modal-header h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .modal-close {
+            width: 40px;
+            height: 40px;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 12px;
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close:hover {
+            background: rgba(248, 113, 113, 0.1);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .modal-body {
+            padding: 2rem;
+            overflow-y: auto;
+            max-height: calc(90vh - 80px);
+        }
+
+        /* Modal Stats */
+        .modal-stats {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .modal-stat {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+
+        .modal-stat .label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-stat .value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* Charts Grid */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 1.5rem;
+        }
+
+        .chart-card h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 280px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1400px) {
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .modal-stats {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 992px) {
+            .form-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .modal-stats {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .modal-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .section-header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(139, 92, 246, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(139, 92, 246, 0.5);
+        }
+
+        /* URL Link */
+        .url-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 0.8rem;
+            transition: color 0.2s;
+        }
+
+        .url-link:hover {
+            color: var(--primary-light);
+            text-decoration: underline;
+        }
+
+        /* Number Mono */
+        .mono {
+            font-family: 'Space Grotesk', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">📊</div>
+                <div class="logo-text">
+                    <h1>FB Ads Dashboard</h1>
+                    <span>Аналітика рекламних кампаній</span>
+                </div>
+            </div>
+        </header>
+
+        <section class="auth-section glass">
+            <h2 class="auth-title">Підключення</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Access Token</label>
+                    <input type="password" id="accessToken" placeholder="Вставте ваш токен...">
+                </div>
+                <div class="form-group">
+                    <label>Business Manager ID</label>
+                    <input type="text" id="businessId" placeholder="123456789">
+                </div>
+                <div class="form-group">
+                    <label>Період</label>
+                    <select id="datePreset">
+                        <option value="today">Сьогодні</option>
+                        <option value="yesterday">Вчора</option>
+                        <option value="last_7d">7 днів</option>
+                        <option value="last_14d">14 днів</option>
+                        <option value="last_30d" selected>30 днів</option>
+                        <option value="last_90d">90 днів</option>
+                        <option value="this_month">Цей місяць</option>
+                        <option value="last_month">Минулий місяць</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="loadDashboard()">
+                    🚀 Завантажити
+                </button>
+            </div>
+        </section>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p class="loading-text" id="loadingText">Завантаження даних...</p>
+        </div>
+
+        <div class="dashboard-content" id="dashboard">
+            <!-- Stats -->
+            <section class="stats-section">
+                <div class="stats-grid">
+                    <div class="stat-card glass">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-label">Витрачено</div>
+                        <div class="stat-value" id="totalSpend">$0</div>
+                    </div>
+                    <div class="stat-card glass">
+                        <div class="stat-icon">👁️</div>
+                        <div class="stat-label">Покази</div>
+                        <div class="stat-value" id="totalImpressions">0</div>
+                    </div>
+                    <div class="stat-card glass">
+                        <div class="stat-icon">🎯</div>
+                        <div class="stat-label">Ліди</div>
+                        <div class="stat-value" id="totalLeads">0</div>
+                    </div>
+                    <div class="stat-card glass">
+                        <div class="stat-icon">💵</div>
+                        <div class="stat-label">CPL</div>
+                        <div class="stat-value" id="avgCPL">$0</div>
+                    </div>
+                    <div class="stat-card glass">
+                        <div class="stat-icon">👆</div>
+                        <div class="stat-label">Кліки</div>
+                        <div class="stat-value" id="totalClicks">0</div>
+                    </div>
+                    <div class="stat-card glass">
+                        <div class="stat-icon">📈</div>
+                        <div class="stat-label">CTR</div>
+                        <div class="stat-value" id="avgCTR">0%</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Accounts Table -->
+            <section class="table-section glass">
+                <div class="section-header">
+                    <h3 class="section-title">Рекламні акаунти</h3>
+                    <div class="export-buttons">
+                        <button class="btn btn-secondary btn-export" onclick="exportCSV()">
+                            📄 CSV
+                        </button>
+                        <button class="btn btn-secondary btn-export" onclick="exportExcel()">
+                            📊 Excel
+                        </button>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table class="data-table" id="accountsTable">
+                        <thead>
+                            <tr>
+                                <th>Акаунт</th>
+                                <th>Витрати</th>
+                                <th>Покази</th>
+                                <th>Ліди</th>
+                                <th>CPL</th>
+                                <th>Охват</th>
+                                <th>Кліки</th>
+                                <th>Link Clicks</th>
+                                <th>CPM</th>
+                                <th>CTR</th>
+                                <th>CPC</th>
+                            </tr>
+                        </thead>
+                        <tbody id="accountsTableBody"></tbody>
+                        <tfoot id="accountsTableFoot"></tfoot>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Account Detail Modal -->
+    <div class="modal-overlay" id="accountModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalAccountName">Деталі акаунту</h2>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-stats" id="modalStats"></div>
+                
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h4>📈 Динаміка витрат та лідів</h4>
+                        <div class="chart-container">
+                            <canvas id="modalDailyChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h4>🎯 Топ кампаній по витратах</h4>
+                        <div class="chart-container">
+                            <canvas id="modalCampaignsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-header">
+                    <h3 class="section-title">Кампанії</h3>
+                    <div class="export-buttons">
+                        <button class="btn btn-secondary btn-export" onclick="exportAccountCSV()">📄 CSV</button>
+                        <button class="btn btn-secondary btn-export" onclick="exportAccountExcel()">📊 Excel</button>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table class="data-table" id="campaignsTable">
+                        <thead>
+                            <tr>
+                                <th>Кампанія</th>
+                                <th>URL</th>
+                                <th>Витрати</th>
+                                <th>Покази</th>
+                                <th>Ліди</th>
+                                <th>CPL</th>
+                                <th>Охват</th>
+                                <th>Кліки</th>
+                                <th>Link</th>
+                                <th>CPM</th>
+                                <th>CTR</th>
+                                <th>CPC</th>
+                            </tr>
+                        </thead>
+                        <tbody id="campaignsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentToken = '';
+        let currentBusinessId = '';
+        let currentDatePreset = 'last_30d';
+        let currentAccountId = '';
+        let accountsData = [];
+        let modalCharts = {};
+
+        // Utility Functions
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return Math.round(num).toLocaleString();
+        }
+
+        function formatCurrency(num, currency = 'USD') {
+            if (currency === 'UAH') {
+                return Math.round(num).toLocaleString() + ' ₴';
+            }
+            return '$' + num.toFixed(2);
+        }
+
+        function formatPercent(num) {
+            return num.toFixed(2) + '%';
+        }
+
+        function truncateUrl(url) {
+            if (!url) return '';
+            try {
+                const parsed = new URL(url);
+                let display = parsed.hostname.replace('www.', '');
+                if (parsed.pathname && parsed.pathname !== '/') {
+                    display += parsed.pathname.slice(0, 15);
+                    if (parsed.pathname.length > 15) display += '...';
+                }
+                return display;
+            } catch {
+                return url.slice(0, 25) + (url.length > 25 ? '...' : '');
+            }
+        }
+
+        function showError(message) {
+            const el = document.getElementById('errorMessage');
+            el.textContent = '⚠️ ' + message;
+            el.classList.add('active');
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').classList.remove('active');
+        }
+
+        function showLoading(text = 'Завантаження даних...') {
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('dashboard').classList.remove('active');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.remove('active');
+        }
+
+        function showDashboard() {
+            document.getElementById('dashboard').classList.add('active');
+        }
+
+        async function fetchAPI(endpoint, params = {}) {
+            const url = new URL(endpoint, window.location.origin);
+            Object.entries(params).forEach(([k, v]) => url.searchParams.append(k, v));
+            
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.detail) throw new Error(data.detail);
+            return data;
+        }
+
+        // Load Dashboard
+        async function loadDashboard() {
+            currentToken = document.getElementById('accessToken').value.trim();
+            currentBusinessId = document.getElementById('businessId').value.trim();
+            currentDatePreset = document.getElementById('datePreset').value;
+
+            if (!currentToken || !currentBusinessId) {
+                showError('Введіть Access Token та Business Manager ID');
+                return;
+            }
+
+            hideError();
+            showLoading('Завантаження даних з усіх акаунтів...');
+
+            try {
+                const summaryData = await fetchAPI('/api/bm/summary', {
+                    token: currentToken,
+                    business_id: currentBusinessId,
+                    date_preset: currentDatePreset
+                });
+
+                accountsData = summaryData.data || [];
+                updateStats(accountsData);
+                updateAccountsTable(accountsData);
+
+                hideLoading();
+                showDashboard();
+            } catch (error) {
+                hideLoading();
+                showError(error.message);
+            }
+        }
+
+        function updateStats(data) {
+            const totals = {
+                spend: 0, impressions: 0, leads: 0, clicks: 0, reach: 0
+            };
+
+            data.forEach(row => {
+                totals.spend += row.spend || 0;
+                totals.impressions += row.impressions || 0;
+                totals.leads += row.leads || 0;
+                totals.clicks += row.clicks || 0;
+                totals.reach += row.reach || 0;
+            });
+
+            const cpl = totals.leads > 0 ? totals.spend / totals.leads : 0;
+            const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
+
+            document.getElementById('totalSpend').textContent = formatCurrency(totals.spend);
+            document.getElementById('totalImpressions').textContent = formatNumber(totals.impressions);
+            document.getElementById('totalLeads').textContent = totals.leads;
+            document.getElementById('avgCPL').textContent = formatCurrency(cpl);
+            document.getElementById('totalClicks').textContent = formatNumber(totals.clicks);
+            document.getElementById('avgCTR').textContent = formatPercent(ctr);
+        }
+
+        function updateAccountsTable(data) {
+            const tbody = document.getElementById('accountsTableBody');
+            const tfoot = document.getElementById('accountsTableFoot');
+            tbody.innerHTML = '';
+            tfoot.innerHTML = '';
+
+            const totals = {
+                spend: 0, impressions: 0, leads: 0, reach: 0,
+                clicks: 0, link_clicks: 0
+            };
+
+            data.forEach(row => {
+                totals.spend += row.spend || 0;
+                totals.impressions += row.impressions || 0;
+                totals.leads += row.leads || 0;
+                totals.reach += row.reach || 0;
+                totals.clicks += row.clicks || 0;
+                totals.link_clicks += row.link_clicks || 0;
+
+                const tr = document.createElement('tr');
+                const currency = row.currency || 'USD';
+                
+                tr.onclick = () => openAccountDetail(row.account_id, row.account_name, currency);
+                
+                tr.innerHTML = `
+                    <td>${row.account_name || '-'}</td>
+                    <td class="mono value-currency">${formatCurrency(row.spend || 0, currency)}</td>
+                    <td class="mono">${formatNumber(row.impressions || 0)}</td>
+                    <td class="mono value-leads">${row.leads || 0}</td>
+                    <td class="mono">${formatCurrency(row.cpl || 0, currency)}</td>
+                    <td class="mono">${formatNumber(row.reach || 0)}</td>
+                    <td class="mono">${formatNumber(row.clicks || 0)}</td>
+                    <td class="mono">${formatNumber(row.link_clicks || 0)}</td>
+                    <td class="mono">${formatCurrency(row.cpm || 0, currency)}</td>
+                    <td class="mono">${formatPercent(row.ctr || 0)}</td>
+                    <td class="mono">${formatCurrency(row.cpc || 0, currency)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            totals.cpl = totals.leads > 0 ? totals.spend / totals.leads : 0;
+            totals.cpm = totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : 0;
+            totals.ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
+            totals.cpc = totals.clicks > 0 ? totals.spend / totals.clicks : 0;
+
+            const tfootRow = document.createElement('tr');
+            tfootRow.innerHTML = `
+                <td>ВСЬОГО (${data.length} акаунтів)</td>
+                <td class="mono">${formatCurrency(totals.spend)}</td>
+                <td class="mono">${formatNumber(totals.impressions)}</td>
+                <td class="mono">${totals.leads}</td>
+                <td class="mono">${formatCurrency(totals.cpl)}</td>
+                <td class="mono">${formatNumber(totals.reach)}</td>
+                <td class="mono">${formatNumber(totals.clicks)}</td>
+                <td class="mono">${formatNumber(totals.link_clicks)}</td>
+                <td class="mono">${formatCurrency(totals.cpm)}</td>
+                <td class="mono">${formatPercent(totals.ctr)}</td>
+                <td class="mono">${formatCurrency(totals.cpc)}</td>
+            `;
+            tfoot.appendChild(tfootRow);
+        }
+
+        // Modal Functions
+        async function openAccountDetail(accountId, accountName, currency) {
+            currentAccountId = accountId.replace('act_', '');
+            document.getElementById('modalAccountName').textContent = accountName;
+            document.getElementById('accountModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+
+            document.getElementById('modalStats').innerHTML = '<div class="loading active" style="padding: 2rem;"><div class="spinner"></div></div>';
+            document.getElementById('campaignsTableBody').innerHTML = '';
+
+            try {
+                const [summaryData, campaignsData, dailyData] = await Promise.all([
+                    fetchAPI('/api/account/summary', {
+                        token: currentToken,
+                        account_id: currentAccountId,
+                        date_preset: currentDatePreset
+                    }),
+                    fetchAPI('/api/account/campaigns', {
+                        token: currentToken,
+                        account_id: currentAccountId,
+                        date_preset: currentDatePreset
+                    }),
+                    fetchAPI('/api/account/daily', {
+                        token: currentToken,
+                        account_id: currentAccountId,
+                        date_preset: currentDatePreset
+                    })
+                ]);
+
+                updateModalStats(summaryData, currency);
+                updateCampaignsTable(campaignsData.data || [], currency);
+                updateModalCharts(dailyData.data || [], campaignsData.data || []);
+            } catch (error) {
+                document.getElementById('modalStats').innerHTML = `<p style="color: var(--danger); padding: 2rem;">Помилка: ${error.message}</p>`;
+            }
+        }
+
+        function updateModalStats(data, currency) {
+            const stats = [
+                { label: 'Витрати', value: formatCurrency(data.spend || 0, currency) },
+                { label: 'Покази', value: formatNumber(data.impressions || 0) },
+                { label: 'Ліди', value: data.leads || 0 },
+                { label: 'CPL', value: formatCurrency(data.cpl || 0, currency) },
+                { label: 'Охват', value: formatNumber(data.reach || 0) },
+                { label: 'Кліки', value: formatNumber(data.clicks || 0) },
+                { label: 'Link Clicks', value: formatNumber(data.link_clicks || 0) },
+                { label: 'CPM', value: formatCurrency(data.cpm || 0, currency) },
+                { label: 'CTR', value: formatPercent(data.ctr || 0) },
+                { label: 'CPC', value: formatCurrency(data.cpc || 0, currency) }
+            ];
+
+            document.getElementById('modalStats').innerHTML = stats.map(s => `
+                <div class="modal-stat">
+                    <div class="label">${s.label}</div>
+                    <div class="value">${s.value}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateCampaignsTable(data, currency) {
+            const tbody = document.getElementById('campaignsTableBody');
+            tbody.innerHTML = '';
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                const url = row.url || '';
+                const urlDisplay = url ? `<a href="${url}" target="_blank" class="url-link" title="${url}">${truncateUrl(url)}</a>` : '-';
+                
+                tr.innerHTML = `
+                    <td>${row.campaign_name || '-'}</td>
+                    <td>${urlDisplay}</td>
+                    <td class="mono value-currency">${formatCurrency(row.spend || 0, currency)}</td>
+                    <td class="mono">${formatNumber(row.impressions || 0)}</td>
+                    <td class="mono value-leads">${row.leads || 0}</td>
+                    <td class="mono">${formatCurrency(row.cpl || 0, currency)}</td>
+                    <td class="mono">${formatNumber(row.reach || 0)}</td>
+                    <td class="mono">${formatNumber(row.clicks || 0)}</td>
+                    <td class="mono">${formatNumber(row.link_clicks || 0)}</td>
+                    <td class="mono">${formatCurrency(row.cpm || 0, currency)}</td>
+                    <td class="mono">${formatPercent(row.ctr || 0)}</td>
+                    <td class="mono">${formatCurrency(row.cpc || 0, currency)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateModalCharts(dailyData, campaignsData) {
+            // Chart.js config
+            Chart.defaults.color = 'rgba(255, 255, 255, 0.5)';
+            Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.05)';
+
+            // Daily Chart
+            const dailyCtx = document.getElementById('modalDailyChart').getContext('2d');
+            
+            const byDate = {};
+            dailyData.forEach(row => {
+                const date = row.date_start;
+                if (!byDate[date]) byDate[date] = { spend: 0, leads: 0 };
+                byDate[date].spend += row.spend || 0;
+                byDate[date].leads += row.leads || 0;
+            });
+
+            const labels = Object.keys(byDate).sort();
+            const spendData = labels.map(d => byDate[d].spend);
+            const leadsData = labels.map(d => byDate[d].leads);
+
+            if (modalCharts.daily) modalCharts.daily.destroy();
+            
+            modalCharts.daily = new Chart(dailyCtx, {
+                type: 'line',
+                data: {
+                    labels: labels.map(d => new Date(d).toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' })),
+                    datasets: [
+                        {
+                            label: 'Витрати',
+                            data: spendData,
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 2,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Ліди',
+                            data: leadsData,
+                            borderColor: '#f472b6',
+                            backgroundColor: 'rgba(244, 114, 182, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 2,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { 
+                            position: 'top',
+                            labels: { usePointStyle: true, padding: 20 }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { position: 'left', grid: { color: 'rgba(255,255,255,0.03)' } },
+                        y1: { position: 'right', grid: { display: false } }
+                    }
+                }
+            });
+
+            // Campaigns Pie Chart
+            const campaignsCtx = document.getElementById('modalCampaignsChart').getContext('2d');
+            
+            const topCampaigns = campaignsData
+                .sort((a, b) => (b.spend || 0) - (a.spend || 0))
+                .slice(0, 5);
+
+            if (modalCharts.campaigns) modalCharts.campaigns.destroy();
+            
+            modalCharts.campaigns = new Chart(campaignsCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: topCampaigns.map(c => (c.campaign_name || '').slice(0, 20)),
+                    datasets: [{
+                        data: topCampaigns.map(c => c.spend || 0),
+                        backgroundColor: [
+                            '#8b5cf6',
+                            '#a78bfa',
+                            '#c084fc',
+                            '#f472b6',
+                            '#60a5fa'
+                        ],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { usePointStyle: true, padding: 15 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function closeModal() {
+            document.getElementById('accountModal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // Close modal on overlay click
+        document.getElementById('accountModal').addEventListener('click', (e) => {
+            if (e.target.id === 'accountModal') closeModal();
+        });
+
+        // Keyboard shortcut
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Export Functions
+        function exportCSV() {
+            window.location.href = `/api/bm/export/csv?token=${encodeURIComponent(currentToken)}&business_id=${currentBusinessId}&date_preset=${currentDatePreset}`;
+        }
+
+        function exportExcel() {
+            window.location.href = `/api/bm/export/excel?token=${encodeURIComponent(currentToken)}&business_id=${currentBusinessId}&date_preset=${currentDatePreset}`;
+        }
+
+        function exportAccountCSV() {
+            window.location.href = `/api/account/export/csv?token=${encodeURIComponent(currentToken)}&account_id=${currentAccountId}&date_preset=${currentDatePreset}`;
+        }
+
+        function exportAccountExcel() {
+            window.location.href = `/api/account/export/excel?token=${encodeURIComponent(currentToken)}&account_id=${currentAccountId}&date_preset=${currentDatePreset}`;
+        }
+    </script>
+</body>
+</html>
