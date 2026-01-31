@@ -101,24 +101,35 @@ class FacebookAdsClient:
         return totals
 
     async def get_business_ad_accounts(self):
-        """Отримати всі рекламні акаунти з Business Manager"""
+        """Отримати всі рекламні акаунти з Business Manager (owned + client)"""
         accounts = []
-        endpoint = f"{self.business_id}/owned_ad_accounts"
-        params = {"fields": "id,name,currency,account_status,amount_spent", "limit": 100}
+        seen_ids = set()
         
-        while True:
-            data = await self._request(endpoint, params)
-            accounts.extend(data.get("data", []))
+        # Отримуємо owned (власні) акаунти
+        for endpoint_type in ["owned_ad_accounts", "client_ad_accounts"]:
+            endpoint = f"{self.business_id}/{endpoint_type}"
+            params = {"fields": "id,name,currency,account_status,amount_spent", "limit": 100}
             
-            paging = data.get("paging", {})
-            if "next" in paging:
-                cursors = paging.get("cursors", {})
-                if "after" in cursors:
-                    params["after"] = cursors["after"]
-                else:
+            while True:
+                try:
+                    data = await self._request(endpoint, params)
+                    for acc in data.get("data", []):
+                        acc_id = acc.get("id")
+                        if acc_id and acc_id not in seen_ids:
+                            seen_ids.add(acc_id)
+                            accounts.append(acc)
+                    
+                    paging = data.get("paging", {})
+                    if "next" in paging:
+                        cursors = paging.get("cursors", {})
+                        if "after" in cursors:
+                            params["after"] = cursors["after"]
+                        else:
+                            break
+                    else:
+                        break
+                except:
                     break
-            else:
-                break
         
         return accounts
     
