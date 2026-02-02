@@ -108,7 +108,7 @@ class FacebookAdsClient:
         # Отримуємо owned (власні) акаунти
         for endpoint_type in ["owned_ad_accounts", "client_ad_accounts"]:
             endpoint = f"{self.business_id}/{endpoint_type}"
-            params = {"fields": "id,name,currency,account_status,amount_spent", "limit": 100}
+            params = {"fields": "id,name,currency,account_status,amount_spent,balance", "limit": 100}
             
             while True:
                 try:
@@ -133,7 +133,7 @@ class FacebookAdsClient:
         
         return accounts
     
-    async def get_account_summary(self, account_id: str, account_name: str, currency: str, date_preset: str = "last_30d"):
+    async def get_account_summary(self, account_id: str, account_name: str, currency: str, date_preset: str = "last_30d", balance: float = 0):
         """Отримати зведені метрики для одного акаунта"""
         if not account_id.startswith("act_"):
             account_id = f"act_{account_id}"
@@ -156,6 +156,7 @@ class FacebookAdsClient:
             totals["account_id"] = account_id
             totals["account_name"] = account_name
             totals["currency"] = currency
+            totals["balance"] = balance
             
             return totals
             
@@ -172,8 +173,9 @@ class FacebookAdsClient:
             account_id = account["id"]
             account_name = account.get("name", "Unknown")
             currency = account.get("currency", "USD")
+            balance = float(account.get("balance", 0)) / 100  # balance в центах
             
-            summary = await self.get_account_summary(account_id, account_name, currency, date_preset)
+            summary = await self.get_account_summary(account_id, account_name, currency, date_preset, balance)
             if summary:
                 summaries.append(summary)
         
