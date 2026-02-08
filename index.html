@@ -851,6 +851,9 @@
                     <span>Аналітика рекламних кампаній</span>
                 </div>
             </div>
+            <button class="btn btn-secondary" onclick="clearCredentials()" style="padding: 0.75rem 1.5rem; font-size: 0.9rem;">
+                🚪 Вийти
+            </button>
         </header>
 
         <section class="auth-section glass">
@@ -931,6 +934,21 @@
             <section class="table-section glass">
                 <div class="section-header">
                     <h3 class="section-title">Рекламні акаунти</h3>
+                    <div style="display: flex; gap: 1rem; align-items: center; flex: 1; max-width: 600px; margin: 0 1rem;">
+                        <input 
+                            type="text" 
+                            id="searchInput" 
+                            placeholder="🔍 Знайти кабінет..." 
+                            style="flex: 1; padding: 0.75rem 1rem; background: var(--bg-glass); border: 1px solid var(--border-glass); border-radius: 12px; color: var(--text-primary); font-size: 0.9rem;"
+                            oninput="filterAccounts()"
+                        >
+                        <button class="btn btn-secondary" onclick="toggleSelectAll()" id="selectAllBtn" style="padding: 0.75rem 1.25rem; font-size: 0.85rem; white-space: nowrap;">
+                            ☑️ Вибрати всі
+                        </button>
+                        <button class="btn btn-secondary" onclick="updateSelectedStats()" style="padding: 0.75rem 1.25rem; font-size: 0.85rem; white-space: nowrap;">
+                            📊 Показати вибрані
+                        </button>
+                    </div>
                     <div class="export-buttons">
                         <button class="btn btn-secondary btn-export" onclick="exportCSV()">
                             📄 CSV
@@ -944,14 +962,17 @@
                     <table class="data-table" id="accountsTable">
                         <thead>
                             <tr>
-                                <th>Акаунт</th>
-                                <th>Білінг</th>
-                                <th>Витрати</th>
-                                <th>Покази</th>
-                                <th>Ліди</th>
-                                <th>CPL</th>
-                                <th>Охват</th>
-                                <th>Кліки</th>
+                                <th style="width: 50px; text-align: center;">
+                                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()" style="cursor: pointer; width: 16px; height: 16px;">
+                                </th>
+                                <th onclick="sortTable('account_name')" style="cursor: pointer;">Акаунт <span id="sort-account_name"></span></th>
+                                <th onclick="sortTable('balance')" style="cursor: pointer;">Білінг <span id="sort-balance"></span></th>
+                                <th onclick="sortTable('spend')" style="cursor: pointer;">Витрати <span id="sort-spend"></span></th>
+                                <th onclick="sortTable('impressions')" style="cursor: pointer;">Покази <span id="sort-impressions"></span></th>
+                                <th onclick="sortTable('leads')" style="cursor: pointer;">Ліди <span id="sort-leads"></span></th>
+                                <th onclick="sortTable('cpl')" style="cursor: pointer;">CPL <span id="sort-cpl"></span></th>
+                                <th onclick="sortTable('reach')" style="cursor: pointer;">Охват <span id="sort-reach"></span></th>
+                                <th onclick="sortTable('clicks')" style="cursor: pointer;">Кліки <span id="sort-clicks"></span></th>
                                 <th>Link Clicks</th>
                                 <th>CPM</th>
                                 <th>CTR</th>
@@ -1029,10 +1050,157 @@
         let currentDatePreset = 'last_30d';
         let currentAccountId = '';
         let accountsData = [];
+        let selectedAccounts = new Set(); // Для чекбоксів
         let modalCharts = {};
 
+        // Load saved credentials on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedToken = localStorage.getItem('fb_token');
+            const savedBusinessId = localStorage.getItem('fb_business_id');
+            
+            if (savedToken) {
+                document.getElementById('accessToken').value = savedToken;
+                currentToken = savedToken;
+            }
+            
+            if (savedBusinessId) {
+                document.getElementById('businessId').value = savedBusinessId;
+                currentBusinessId = savedBusinessId;
+            }
+        });
+
+        function saveCredentials() {
+            if (currentToken) {
+                localStorage.setItem('fb_token', currentToken);
+            }
+            if (currentBusinessId) {
+                localStorage.setItem('fb_business_id', currentBusinessId);
+            }
+        }
+
+        function clearCredentials() {
+            if (confirm('Видалити збережені дані? Доведеться ввести токен заново.')) {
+                localStorage.removeItem('fb_token');
+                localStorage.removeItem('fb_business_id');
+                document.getElementById('accessToken').value = '';
+                document.getElementById('businessId').value = '';
+                currentToken = '';
+                currentBusinessId = '';
+                document.getElementById('dashboard').classList.remove('active');
+            }
+        }
+
         // Utility Functions
-        function formatNumber(num) {
+        let currentSortColumn = 'balance';
+        let currentSortDirection = 'desc';
+        let filteredData = [];
+
+        function toggleSelectAll() {
+            const checkbox = document.getElementById('selectAllCheckbox');
+            const isChecked = checkbox.checked;
+            
+            selectedAccounts.clear();
+            
+            if (isChecked) {
+                filteredData.forEach(row => selectedAccounts.add(row.account_id));
+            }
+            
+            updateAccountsTable(filteredData);
+            updateSelectAllButton();
+        }
+
+        function toggleAccountSelection(accountId) {
+            if (selectedAccounts.has(accountId)) {
+                selectedAccounts.delete(accountId);
+            } else {
+                selectedAccounts.add(accountId);
+            }
+            updateSelectAllButton();
+        }
+
+        function updateSelectAllButton() {
+            const btn = document.getElementById('selectAllBtn');
+            const checkbox = document.getElementById('selectAllCheckbox');
+            
+            if (selectedAccounts.size === 0) {
+                btn.textContent = '☑️ Вибрати всі';
+                checkbox.checked = false;
+            } else if (selectedAccounts.size === filteredData.length) {
+                btn.textContent = '☐ Скасувати всі';
+                checkbox.checked = true;
+            } else {
+                btn.textContent = `☑️ Вибрано: ${selectedAccounts.size}`;
+                checkbox.checked = false;
+            }
+        }
+
+        function updateSelectedStats() {
+            if (selectedAccounts.size === 0) {
+                showError('Виберіть хоча б один акаунт');
+                setTimeout(hideError, 2000);
+                return;
+            }
+            
+            const selectedData = accountsData.filter(row => selectedAccounts.has(row.account_id));
+            updateStats(selectedData);
+        }
+
+        function filterAccounts() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            filteredData = accountsData.filter(row => 
+                (row.account_name || '').toLowerCase().includes(searchTerm)
+            );
+            
+            sortData(filteredData);
+            updateAccountsTable(filteredData);
+        }
+
+        function sortTable(column) {
+            if (currentSortColumn === column) {
+                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                currentSortDirection = 'desc';
+            }
+            
+            sortData(filteredData);
+            updateAccountsTable(filteredData);
+            updateSortIndicators();
+        }
+
+        function sortData(data) {
+            data.sort((a, b) => {
+                let aVal = a[currentSortColumn];
+                let bVal = b[currentSortColumn];
+                
+                // Handle string comparison for account_name
+                if (currentSortColumn === 'account_name') {
+                    aVal = (aVal || '').toLowerCase();
+                    bVal = (bVal || '').toLowerCase();
+                } else {
+                    aVal = parseFloat(aVal) || 0;
+                    bVal = parseFloat(bVal) || 0;
+                }
+                
+                if (currentSortDirection === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+        }
+
+        function updateSortIndicators() {
+            // Clear all indicators
+            document.querySelectorAll('[id^="sort-"]').forEach(el => el.textContent = '');
+            
+            // Set current indicator
+            const indicator = document.getElementById(`sort-${currentSortColumn}`);
+            if (indicator) {
+                indicator.textContent = currentSortDirection === 'asc' ? ' ↑' : ' ↓';
+            }
+        }
             if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
             if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
             return Math.round(num).toLocaleString();
@@ -1110,6 +1278,9 @@
                 return;
             }
 
+            // Зберігаємо credentials
+            saveCredentials();
+
             hideError();
             showLoading('Завантаження даних з усіх акаунтів...');
 
@@ -1121,8 +1292,10 @@
                 });
 
                 accountsData = summaryData.data || [];
+                filteredData = [...accountsData];
+                sortData(filteredData);
                 updateStats(accountsData);
-                updateAccountsTable(accountsData);
+                updateAccountsTable(filteredData);
 
                 hideLoading();
                 showDashboard();
@@ -1178,11 +1351,18 @@
 
                 const tr = document.createElement('tr');
                 const currency = row.currency || 'USD';
-                
-                tr.onclick = () => openAccountDetail(row.account_id, row.account_name, currency);
+                const isSelected = selectedAccounts.has(row.account_id);
                 
                 tr.innerHTML = `
-                    <td>${row.account_name || '-'}</td>
+                    <td style="text-align: center;" onclick="event.stopPropagation();">
+                        <input 
+                            type="checkbox" 
+                            ${isSelected ? 'checked' : ''} 
+                            onchange="toggleAccountSelection('${row.account_id}')" 
+                            style="cursor: pointer; width: 16px; height: 16px;"
+                        >
+                    </td>
+                    <td onclick="openAccountDetail('${row.account_id}', '${row.account_name}', '${currency}')" style="cursor: pointer;">${row.account_name || '-'}</td>
                     <td class="mono" style="color: ${(row.balance || 0) > 0 ? 'var(--danger)' : 'var(--success)'}">${formatCurrency(row.balance || 0, currency)}</td>
                     <td class="mono value-currency">${formatCurrency(row.spend || 0, currency)}</td>
                     <td class="mono">${formatNumber(row.impressions || 0)}</td>
@@ -1205,6 +1385,7 @@
 
             const tfootRow = document.createElement('tr');
             tfootRow.innerHTML = `
+                <td></td>
                 <td>ВСЬОГО (${data.length} акаунтів)</td>
                 <td class="mono">${formatCurrency(totals.balance)}</td>
                 <td class="mono">${formatCurrency(totals.spend)}</td>
@@ -1219,6 +1400,9 @@
                 <td class="mono">${formatCurrency(totals.cpc)}</td>
             `;
             tfoot.appendChild(tfootRow);
+            
+            updateSortIndicators();
+            updateSelectAllButton();
         }
 
         // Modal Functions
