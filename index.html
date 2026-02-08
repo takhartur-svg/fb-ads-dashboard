@@ -945,6 +945,7 @@
                         <thead>
                             <tr>
                                 <th>Акаунт</th>
+                                <th>Білінг</th>
                                 <th>Витрати</th>
                                 <th>Покази</th>
                                 <th>Ліди</th>
@@ -1163,7 +1164,7 @@
 
             const totals = {
                 spend: 0, impressions: 0, leads: 0, reach: 0,
-                clicks: 0, link_clicks: 0
+                clicks: 0, link_clicks: 0, balance: 0
             };
 
             data.forEach(row => {
@@ -1173,6 +1174,7 @@
                 totals.reach += row.reach || 0;
                 totals.clicks += row.clicks || 0;
                 totals.link_clicks += row.link_clicks || 0;
+                totals.balance += row.balance || 0;
 
                 const tr = document.createElement('tr');
                 const currency = row.currency || 'USD';
@@ -1181,6 +1183,7 @@
                 
                 tr.innerHTML = `
                     <td>${row.account_name || '-'}</td>
+                    <td class="mono" style="color: ${(row.balance || 0) > 0 ? 'var(--danger)' : 'var(--success)'}">${formatCurrency(row.balance || 0, currency)}</td>
                     <td class="mono value-currency">${formatCurrency(row.spend || 0, currency)}</td>
                     <td class="mono">${formatNumber(row.impressions || 0)}</td>
                     <td class="mono value-leads">${row.leads || 0}</td>
@@ -1203,6 +1206,7 @@
             const tfootRow = document.createElement('tr');
             tfootRow.innerHTML = `
                 <td>ВСЬОГО (${data.length} акаунтів)</td>
+                <td class="mono">${formatCurrency(totals.balance)}</td>
                 <td class="mono">${formatCurrency(totals.spend)}</td>
                 <td class="mono">${formatNumber(totals.impressions)}</td>
                 <td class="mono">${totals.leads}</td>
