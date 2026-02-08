@@ -754,6 +754,12 @@
             .modal-stats {
                 grid-template-columns: repeat(5, 1fr);
             }
+            .charts-wrapper {
+                grid-template-columns: 1fr 1fr !important;
+            }
+            .charts-wrapper > div:last-child {
+                grid-column: span 2;
+            }
         }
 
         @media (max-width: 1200px) {
@@ -771,6 +777,9 @@
             }
             .modal-stats {
                 grid-template-columns: repeat(3, 1fr);
+            }
+            .charts-wrapper {
+                grid-template-columns: 1fr !important;
             }
         }
 
@@ -930,8 +939,55 @@
                 </div>
             </section>
 
+            <!-- Charts Section -->
+            <section class="charts-wrapper" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+                <div class="glass" style="padding: 1.5rem; border-radius: 24px;">
+                    <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-secondary);">
+                        💰 Розподіл витрат по кабінетах (Топ-10)
+                    </h3>
+                    <div style="position: relative; height: 300px;">
+                        <canvas id="spendPieChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass" style="padding: 1.5rem; border-radius: 24px;">
+                    <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-secondary);">
+                        📈 Тренд витрат за останні 30 днів
+                    </h3>
+                    <div style="position: relative; height: 300px;">
+                        <canvas id="trendLineChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass" style="padding: 1.5rem; border-radius: 24px;">
+                    <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-secondary);">
+                        💵 Розподіл CPL (ціна за лід)
+                    </h3>
+                    <div style="position: relative; height: 300px;">
+                        <canvas id="cplBarChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
             <!-- Accounts Table -->
             <section class="table-section glass">
+                <!-- Bulk Filters -->
+                <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" onclick="filterProblematic()" style="padding: 0.625rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                        🔴 Проблемні
+                    </button>
+                    <button class="btn btn-secondary" onclick="filterTopPerformers()" style="padding: 0.625rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                        🟢 Топ виконавці
+                    </button>
+                    <button class="btn btn-secondary" onclick="filterWithDebt()" style="padding: 0.625rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                        💰 З боргом
+                    </button>
+                    <button class="btn btn-secondary" onclick="filterActive()" style="padding: 0.625rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                        ✅ Активні
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetFilters()" style="padding: 0.625rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                        🔄 Скинути
+                    </button>
+                </div>
+                
                 <div class="section-header">
                     <h3 class="section-title">Рекламні акаунти</h3>
                     <div style="display: flex; gap: 1rem; align-items: center; flex: 1; max-width: 600px; margin: 0 1rem;">
@@ -966,6 +1022,7 @@
                                     <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()" style="cursor: pointer; width: 16px; height: 16px;">
                                 </th>
                                 <th onclick="sortTable('account_name')" style="cursor: pointer;">Акаунт <span id="sort-account_name"></span></th>
+                                <th style="width: 150px;">Tags</th>
                                 <th onclick="sortTable('balance')" style="cursor: pointer;">Білінг <span id="sort-balance"></span></th>
                                 <th onclick="sortTable('spend')" style="cursor: pointer;">Витрати <span id="sort-spend"></span></th>
                                 <th onclick="sortTable('impressions')" style="cursor: pointer;">Покази <span id="sort-impressions"></span></th>
@@ -1055,11 +1112,15 @@
         let currentSortDirection = 'desc';
         let filteredData = [];
         let modalCharts = {};
+        let mainCharts = {}; // Графіки на головній
+        let accountTags = {}; // {account_id: ['tag1', 'tag2']}
+        let currentFilter = 'all'; // Поточний bulk фільтр
 
         // Load saved credentials on page load
         window.addEventListener('DOMContentLoaded', () => {
             const savedToken = localStorage.getItem('fb_token');
             const savedBusinessId = localStorage.getItem('fb_business_id');
+            const savedTags = localStorage.getItem('fb_account_tags');
             
             if (savedToken) {
                 document.getElementById('accessToken').value = savedToken;
@@ -1069,6 +1130,14 @@
             if (savedBusinessId) {
                 document.getElementById('businessId').value = savedBusinessId;
                 currentBusinessId = savedBusinessId;
+            }
+            
+            if (savedTags) {
+                try {
+                    accountTags = JSON.parse(savedTags);
+                } catch (e) {
+                    accountTags = {};
+                }
             }
         });
 
@@ -1143,6 +1212,344 @@
             updateStats(selectedData);
         }
 
+        // Charts Functions
+        function updateMainCharts(data) {
+            // Pie Chart - Top 10 by spend
+            const topAccounts = [...data]
+                .sort((a, b) => (b.spend || 0) - (a.spend || 0))
+                .slice(0, 10);
+            
+            const pieCtx = document.getElementById('spendPieChart')?.getContext('2d');
+            if (pieCtx) {
+                if (mainCharts.pie) mainCharts.pie.destroy();
+                
+                mainCharts.pie = new Chart(pieCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: topAccounts.map(a => (a.account_name || '').slice(0, 20)),
+                        datasets: [{
+                            data: topAccounts.map(a => a.spend || 0),
+                            backgroundColor: [
+                                '#8b5cf6', '#a78bfa', '#c084fc', '#e879f9', '#f0abfc',
+                                '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', '#1e40af'
+                            ],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '60%',
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: { 
+                                    color: 'rgba(255,255,255,0.7)', 
+                                    padding: 10,
+                                    font: { size: 11 }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.label + ': $' + context.parsed.toFixed(2);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // CPL Bar Chart - Distribution
+            updateCPLChart(data);
+        }
+        
+        function updateCPLChart(data) {
+            // Розподіл кабінетів по діапазонах CPL
+            const withLeads = data.filter(r => (r.leads || 0) > 0);
+            
+            const ranges = {
+                '<$5': 0,
+                '$5-10': 0,
+                '$10-20': 0,
+                '$20-30': 0,
+                '$30-50': 0,
+                '>$50': 0
+            };
+            
+            withLeads.forEach(row => {
+                const cpl = row.cpl || 0;
+                if (cpl < 5) ranges['<$5']++;
+                else if (cpl < 10) ranges['$5-10']++;
+                else if (cpl < 20) ranges['$10-20']++;
+                else if (cpl < 30) ranges['$20-30']++;
+                else if (cpl < 50) ranges['$30-50']++;
+                else ranges['>$50']++;
+            });
+            
+            const cplCtx = document.getElementById('cplBarChart')?.getContext('2d');
+            if (cplCtx) {
+                if (mainCharts.cpl) mainCharts.cpl.destroy();
+                
+                mainCharts.cpl = new Chart(cplCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(ranges),
+                        datasets: [{
+                            label: 'Кількість кабінетів',
+                            data: Object.values(ranges),
+                            backgroundColor: [
+                                '#10b981', // green
+                                '#34d399',
+                                '#fbbf24', // yellow
+                                '#fb923c', // orange
+                                '#f87171', // red
+                                '#dc2626'  // dark red
+                            ],
+                            borderRadius: 6,
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'Кабінетів: ' + context.parsed.y;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { 
+                                ticks: { color: 'rgba(255,255,255,0.7)' },
+                                grid: { display: false }
+                            },
+                            y: { 
+                                ticks: { 
+                                    color: 'rgba(255,255,255,0.7)',
+                                    stepSize: 1
+                                },
+                                grid: { color: 'rgba(255,255,255,0.05)' }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        async function loadTrendData() {
+            // Завантажуємо денну статистику для графіка тренду
+            try {
+                const dailyData = await fetchAPI('/api/bm/insights/daily', {
+                    token: currentToken,
+                    business_id: currentBusinessId,
+                    date_preset: currentDatePreset
+                });
+                
+                updateTrendChart(dailyData.data || []);
+            } catch (error) {
+                console.error('Failed to load trend data:', error);
+            }
+        }
+
+        function updateTrendChart(dailyData) {
+            // Group by date
+            const byDate = {};
+            dailyData.forEach(row => {
+                const date = row.date_start;
+                if (!byDate[date]) {
+                    byDate[date] = { spend: 0, leads: 0 };
+                }
+                byDate[date].spend += row.spend || 0;
+                byDate[date].leads += row.leads || 0;
+            });
+
+            const dates = Object.keys(byDate).sort();
+            const spendData = dates.map(d => byDate[d].spend);
+            const leadsData = dates.map(d => byDate[d].leads);
+
+            const lineCtx = document.getElementById('trendLineChart')?.getContext('2d');
+            if (lineCtx) {
+                if (mainCharts.line) mainCharts.line.destroy();
+                
+                mainCharts.line = new Chart(lineCtx, {
+                    type: 'line',
+                    data: {
+                        labels: dates.map(d => new Date(d).toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' })),
+                        datasets: [
+                            {
+                                label: 'Витрати ($)',
+                                data: spendData,
+                                borderColor: '#8b5cf6',
+                                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                borderWidth: 2,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Ліди',
+                                data: leadsData,
+                                borderColor: '#f472b6',
+                                backgroundColor: 'rgba(244, 114, 182, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                borderWidth: 2,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { 
+                                labels: { color: 'rgba(255,255,255,0.7)', usePointStyle: true }
+                            }
+                        },
+                        scales: {
+                            x: { 
+                                ticks: { color: 'rgba(255,255,255,0.5)' },
+                                grid: { display: false }
+                            },
+                            y: { 
+                                position: 'left',
+                                ticks: { color: '#8b5cf6' },
+                                grid: { color: 'rgba(255,255,255,0.05)' }
+                            },
+                            y1: { 
+                                position: 'right',
+                                ticks: { color: '#f472b6' },
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Bulk Filter Functions
+        function filterProblematic() {
+            currentFilter = 'problematic';
+            // Проблемні: борг > $500 АБО CPL зріс >30% АБО немає лідів
+            filteredData = accountsData.filter(row => {
+                const hasDebt = (row.balance || 0) > 500;
+                const noLeads = (row.leads || 0) === 0 && (row.spend || 0) > 0;
+                return hasDebt || noLeads;
+            });
+            sortData(filteredData);
+            updateAccountsTable(filteredData);
+        }
+
+        function filterTopPerformers() {
+            currentFilter = 'top';
+            // Топ 20% по CPL (найнижчий CPL)
+            const withLeads = accountsData.filter(r => (r.leads || 0) > 0);
+            withLeads.sort((a, b) => (a.cpl || 999999) - (b.cpl || 999999));
+            const top20Percent = Math.max(1, Math.floor(withLeads.length * 0.2));
+            filteredData = withLeads.slice(0, top20Percent);
+            sortData(filteredData);
+            updateAccountsTable(filteredData);
+        }
+
+        function filterWithDebt() {
+            currentFilter = 'debt';
+            filteredData = accountsData.filter(row => (row.balance || 0) > 0);
+            sortData(filteredData);
+            updateAccountsTable(filteredData);
+        }
+
+        function filterActive() {
+            currentFilter = 'active';
+            // Активні: мають витрати за період
+            filteredData = accountsData.filter(row => (row.spend || 0) > 0);
+            sortData(filteredData);
+            updateAccountsTable(filteredData);
+        }
+
+        function resetFilters() {
+            currentFilter = 'all';
+            document.getElementById('searchInput').value = '';
+            filterAccounts();
+        }
+
+        // Tags Functions
+        function saveTags() {
+            localStorage.setItem('fb_account_tags', JSON.stringify(accountTags));
+        }
+
+        function addTagToAccount(accountId, tag) {
+            if (!accountTags[accountId]) {
+                accountTags[accountId] = [];
+            }
+            if (!accountTags[accountId].includes(tag)) {
+                accountTags[accountId].push(tag);
+                saveTags();
+            }
+        }
+
+        function removeTagFromAccount(accountId, tag) {
+            if (accountTags[accountId]) {
+                accountTags[accountId] = accountTags[accountId].filter(t => t !== tag);
+                saveTags();
+            }
+        }
+
+        function promptAddTag(accountId) {
+            const tag = prompt('Введіть тег (наприклад: "High Priority", "US Market", "Product A"):');
+            if (tag && tag.trim()) {
+                addTagToAccount(accountId, tag.trim());
+                updateAccountsTable(filteredData);
+            }
+        }
+
+        function renderTags(accountId) {
+            const tags = accountTags[accountId] || [];
+            if (tags.length === 0) {
+                return `<span style="color: var(--text-muted); font-size: 0.75rem; cursor: pointer;" onclick="promptAddTag('${accountId}')">+ додати тег</span>`;
+            }
+            
+            const tagsHtml = tags.map(tag => `
+                <span style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.25rem;
+                    padding: 0.25rem 0.5rem;
+                    background: rgba(139, 92, 246, 0.2);
+                    border: 1px solid rgba(139, 92, 246, 0.3);
+                    border-radius: 6px;
+                    font-size: 0.7rem;
+                    color: var(--primary-light);
+                    margin-right: 0.25rem;
+                    white-space: nowrap;
+                ">
+                    ${tag}
+                    <button 
+                        onclick="event.stopPropagation(); removeTagFromAccount('${accountId}', '${tag}'); updateAccountsTable(filteredData);"
+                        style="
+                            background: none;
+                            border: none;
+                            color: var(--text-muted);
+                            cursor: pointer;
+                            padding: 0;
+                            margin-left: 0.125rem;
+                            font-size: 0.8rem;
+                            line-height: 1;
+                        "
+                    >×</button>
+                </span>
+            `).join('');
+            
+            return tagsHtml + `<span style="color: var(--text-muted); font-size: 0.75rem; cursor: pointer; margin-left: 0.25rem;" onclick="promptAddTag('${accountId}')">+</span>`;
+        }
+
+        // Update existing functions
         function filterAccounts() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             
@@ -1297,6 +1704,10 @@
                 sortData(filteredData);
                 updateStats(accountsData);
                 updateAccountsTable(filteredData);
+                
+                // Update charts
+                updateMainCharts(accountsData);
+                loadTrendData();
 
                 hideLoading();
                 showDashboard();
@@ -1364,6 +1775,7 @@
                         >
                     </td>
                     <td onclick="openAccountDetail('${row.account_id}', '${row.account_name}', '${currency}')" style="cursor: pointer;">${row.account_name || '-'}</td>
+                    <td onclick="event.stopPropagation();" style="padding: 0.5rem;">${renderTags(row.account_id)}</td>
                     <td class="mono" style="color: ${(row.balance || 0) > 0 ? 'var(--danger)' : 'var(--success)'}">${formatCurrency(row.balance || 0, currency)}</td>
                     <td class="mono value-currency">${formatCurrency(row.spend || 0, currency)}</td>
                     <td class="mono">${formatNumber(row.impressions || 0)}</td>
@@ -1388,6 +1800,7 @@
             tfootRow.innerHTML = `
                 <td></td>
                 <td>ВСЬОГО (${data.length} акаунтів)</td>
+                <td></td>
                 <td class="mono">${formatCurrency(totals.balance)}</td>
                 <td class="mono">${formatCurrency(totals.spend)}</td>
                 <td class="mono">${formatNumber(totals.impressions)}</td>
