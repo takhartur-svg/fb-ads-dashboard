@@ -939,34 +939,6 @@
                 </div>
             </section>
 
-            <!-- Charts Section -->
-            <section class="charts-wrapper" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
-                <div class="glass" style="padding: 1.5rem; border-radius: 24px;">
-                    <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-secondary);">
-                        💰 Розподіл витрат по кабінетах (Топ-10)
-                    </h3>
-                    <div style="position: relative; height: 300px;">
-                        <canvas id="spendPieChart"></canvas>
-                    </div>
-                </div>
-                <div class="glass" style="padding: 1.5rem; border-radius: 24px;">
-                    <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-secondary);">
-                        📈 Тренд витрат за останні 30 днів
-                    </h3>
-                    <div style="position: relative; height: 300px;">
-                        <canvas id="trendLineChart"></canvas>
-                    </div>
-                </div>
-                <div class="glass" style="padding: 1.5rem; border-radius: 24px;">
-                    <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-secondary);">
-                        💵 Розподіл CPL (ціна за лід)
-                    </h3>
-                    <div style="position: relative; height: 300px;">
-                        <canvas id="cplBarChart"></canvas>
-                    </div>
-                </div>
-            </section>
-
             <!-- Accounts Table -->
             <section class="table-section glass">
                 <!-- Bulk Filters -->
@@ -982,6 +954,9 @@
                     </button>
                     <button class="btn btn-secondary" onclick="filterActive()" style="padding: 0.625rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
                         ✅ Активні
+                    </button>
+                    <button class="btn btn-secondary" onclick="showTagFilter()" style="padding: 0.625rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                        🏷️ За тегом
                     </button>
                     <button class="btn btn-secondary" onclick="resetFilters()" style="padding: 0.625rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
                         🔄 Скинути
@@ -1478,6 +1453,97 @@
             document.getElementById('searchInput').value = '';
             filterAccounts();
         }
+        
+        function showTagFilter() {
+            // Збираємо всі унікальні теги
+            const allTags = new Set();
+            Object.values(accountTags).forEach(tags => {
+                tags.forEach(tag => allTags.add(tag));
+            });
+            
+            if (allTags.size === 0) {
+                alert('Немає створених тегів. Додайте теги до кабінетів спочатку.');
+                return;
+            }
+            
+            const existingTags = Array.from(allTags).sort();
+            
+            // Створюємо модальне вікно для вибору тега
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.8);
+                backdrop-filter: blur(8px);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 2rem;
+            `;
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                background: var(--bg-card);
+                border: 1px solid var(--border-glass);
+                border-radius: 20px;
+                padding: 2rem;
+                max-width: 500px;
+                width: 100%;
+            `;
+            
+            content.innerHTML = `
+                <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 1.25rem; margin-bottom: 1.5rem; color: var(--text-primary);">
+                    Фільтрувати за тегом
+                </h3>
+                
+                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem;">
+                    ${existingTags.map(tag => `
+                        <button 
+                            onclick="filterByTag('${tag}'); document.body.removeChild(this.closest('[style*=fixed]'));"
+                            style="
+                                padding: 0.75rem 1.25rem;
+                                background: var(--bg-glass);
+                                border: 1px solid var(--border-glass);
+                                border-radius: 12px;
+                                color: var(--text-primary);
+                                cursor: pointer;
+                                transition: all 0.2s ease;
+                                font-size: 0.9rem;
+                            "
+                            onmouseover="this.style.background='rgba(139, 92, 246, 0.2)'; this.style.borderColor='var(--primary)';"
+                            onmouseout="this.style.background='var(--bg-glass)'; this.style.borderColor='var(--border-glass)';"
+                        >
+                            🏷️ ${tag}
+                        </button>
+                    `).join('')}
+                </div>
+                
+                <button 
+                    onclick="document.body.removeChild(this.closest('[style*=fixed]'));"
+                    class="btn btn-secondary"
+                    style="width: 100%; padding: 0.875rem;"
+                >
+                    Скасувати
+                </button>
+            `;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+        }
+        
+        function filterByTag(tag) {
+            currentFilter = 'tag:' + tag;
+            filteredData = accountsData.filter(row => {
+                const tags = accountTags[row.account_id] || [];
+                return tags.includes(tag);
+            });
+            sortData(filteredData);
+            updateAccountsTable(filteredData);
+        }
 
         // Tags Functions
         function saveTags() {
@@ -1502,11 +1568,140 @@
         }
 
         function promptAddTag(accountId) {
-            const tag = prompt('Введіть тег (наприклад: "High Priority", "US Market", "Product A"):');
-            if (tag && tag.trim()) {
-                addTagToAccount(accountId, tag.trim());
-                updateAccountsTable(filteredData);
-            }
+            // Збираємо всі унікальні теги з усіх акаунтів
+            const allTags = new Set();
+            Object.values(accountTags).forEach(tags => {
+                tags.forEach(tag => allTags.add(tag));
+            });
+            
+            const existingTags = Array.from(allTags).sort();
+            
+            // Створюємо модальне вікно для вибору
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.8);
+                backdrop-filter: blur(8px);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 2rem;
+            `;
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                background: var(--bg-card);
+                border: 1px solid var(--border-glass);
+                border-radius: 20px;
+                padding: 2rem;
+                max-width: 500px;
+                width: 100%;
+                max-height: 80vh;
+                overflow-y: auto;
+            `;
+            
+            content.innerHTML = `
+                <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 1.25rem; margin-bottom: 1.5rem; color: var(--text-primary);">
+                    Додати тег
+                </h3>
+                
+                ${existingTags.length > 0 ? `
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                            Обрати існуючий тег:
+                        </label>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            ${existingTags.map(tag => `
+                                <button 
+                                    onclick="addExistingTag('${accountId}', '${tag}'); document.body.removeChild(this.closest('[style*=fixed]'));"
+                                    style="
+                                        padding: 0.5rem 1rem;
+                                        background: var(--bg-glass);
+                                        border: 1px solid var(--border-glass);
+                                        border-radius: 10px;
+                                        color: var(--text-primary);
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                        font-size: 0.85rem;
+                                    "
+                                    onmouseover="this.style.background='rgba(139, 92, 246, 0.2)'; this.style.borderColor='var(--primary)';"
+                                    onmouseout="this.style.background='var(--bg-glass)'; this.style.borderColor='var(--border-glass)';"
+                                >
+                                    ${tag}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin: 1.5rem 0; color: var(--text-muted); font-size: 0.85rem;">
+                        АБО
+                    </div>
+                ` : ''}
+                
+                <div>
+                    <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                        Створити новий тег:
+                    </label>
+                    <div style="display: flex; gap: 0.75rem;">
+                        <input 
+                            type="text" 
+                            id="newTagInput"
+                            placeholder="Наприклад: High Priority"
+                            style="
+                                flex: 1;
+                                padding: 0.875rem 1rem;
+                                background: var(--bg-glass);
+                                border: 1px solid var(--border-glass);
+                                border-radius: 12px;
+                                color: var(--text-primary);
+                                font-size: 0.9rem;
+                            "
+                            onkeypress="if(event.key==='Enter') document.getElementById('addNewTagBtn').click();"
+                        >
+                        <button 
+                            id="addNewTagBtn"
+                            onclick="
+                                const input = document.getElementById('newTagInput');
+                                if(input.value.trim()) {
+                                    addExistingTag('${accountId}', input.value.trim());
+                                    document.body.removeChild(this.closest('[style*=fixed]'));
+                                }
+                            "
+                            class="btn btn-primary"
+                            style="padding: 0.875rem 1.5rem; font-size: 0.9rem;"
+                        >
+                            ➕ Додати
+                        </button>
+                    </div>
+                </div>
+                
+                <button 
+                    onclick="document.body.removeChild(this.closest('[style*=fixed]'));"
+                    class="btn btn-secondary"
+                    style="width: 100%; margin-top: 1.5rem; padding: 0.875rem;"
+                >
+                    Скасувати
+                </button>
+            `;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+            
+            // Focus на input
+            setTimeout(() => {
+                const input = document.getElementById('newTagInput');
+                if (input) input.focus();
+            }, 100);
+        }
+        
+        function addExistingTag(accountId, tag) {
+            addTagToAccount(accountId, tag);
+            updateAccountsTable(filteredData);
         }
 
         function renderTags(accountId) {
@@ -1704,10 +1899,6 @@
                 sortData(filteredData);
                 updateStats(accountsData);
                 updateAccountsTable(filteredData);
-                
-                // Update charts
-                updateMainCharts(accountsData);
-                loadTrendData();
 
                 hideLoading();
                 showDashboard();
