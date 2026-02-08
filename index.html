@@ -1050,7 +1050,10 @@
         let currentDatePreset = 'last_30d';
         let currentAccountId = '';
         let accountsData = [];
-        let selectedAccounts = new Set(); // Для чекбоксів
+        let selectedAccounts = new Set();
+        let currentSortColumn = 'balance';
+        let currentSortDirection = 'desc';
+        let filteredData = [];
         let modalCharts = {};
 
         // Load saved credentials on page load
@@ -1089,11 +1092,6 @@
                 document.getElementById('dashboard').classList.remove('active');
             }
         }
-
-        // Utility Functions
-        let currentSortColumn = 'balance';
-        let currentSortDirection = 'desc';
-        let filteredData = [];
 
         function toggleSelectAll() {
             const checkbox = document.getElementById('selectAllCheckbox');
@@ -1201,6 +1199,13 @@
                 indicator.textContent = currentSortDirection === 'asc' ? ' ↑' : ' ↓';
             }
         }
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return Math.round(num).toLocaleString();
+        }
+
+        // Utility Functions
+        function formatNumber(num) {
             if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
             if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
             return Math.round(num).toLocaleString();
