@@ -528,6 +528,16 @@
             color: var(--primary-light);
         }
 
+        /* High CPL warning row */
+        .data-table tbody tr.high-cpl-row {
+            background: rgba(251, 191, 36, 0.08);
+            border-left: 3px solid var(--warning);
+        }
+
+        .data-table tbody tr.high-cpl-row:hover {
+            background: rgba(251, 191, 36, 0.15);
+        }
+
         .data-table tfoot td {
             padding: 1.25rem 1rem;
             font-weight: 700;
@@ -1955,6 +1965,12 @@
                 const tr = document.createElement('tr');
                 const currency = row.currency || 'USD';
                 const isSelected = selectedAccounts.has(row.account_id);
+                const highCPL = (row.cpl || 0) > 6.5;
+                
+                // Додаємо клас для підсвічування високого CPL
+                if (highCPL) {
+                    tr.classList.add('high-cpl-row');
+                }
                 
                 tr.innerHTML = `
                     <td style="text-align: center;" onclick="event.stopPropagation();">
@@ -1971,7 +1987,7 @@
                     <td class="mono value-currency">${formatCurrency(row.spend || 0, currency)}</td>
                     <td class="mono">${formatNumber(row.impressions || 0)}</td>
                     <td class="mono value-leads">${row.leads || 0}</td>
-                    <td class="mono">${formatCurrency(row.cpl || 0, currency)}</td>
+                    <td class="mono">${formatCurrency(row.cpl || 0, currency)}${highCPL ? ' ⚠️' : ''}</td>
                     <td class="mono">${formatNumber(row.reach || 0)}</td>
                     <td class="mono">${formatNumber(row.clicks || 0)}</td>
                     <td class="mono">${formatNumber(row.link_clicks || 0)}</td>
