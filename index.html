@@ -853,6 +853,173 @@
         .mono {
             font-family: 'Space Grotesk', monospace;
         }
+
+        /* Billing Section */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card-item {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .card-item:hover {
+            border-color: rgba(139, 92, 246, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        .card-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent-pink) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .card-details h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .card-number {
+            font-family: 'Space Grotesk', monospace;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .card-edit-btn {
+            background: none;
+            border: none;
+            color: var(--primary-light);
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .card-edit-btn:hover {
+            color: var(--primary);
+            transform: scale(1.1);
+        }
+
+        .card-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-stat {
+            text-align: center;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+        }
+
+        .card-stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            font-family: 'Space Grotesk', monospace;
+        }
+
+        .card-stat-value.negative {
+            color: var(--danger);
+        }
+
+        .card-stat-value.positive {
+            color: var(--success);
+        }
+
+        .card-accounts {
+            margin-top: 1rem;
+        }
+
+        .card-accounts-toggle {
+            width: 100%;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 10px;
+            padding: 0.75rem;
+            color: var(--primary-light);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-accounts-toggle:hover {
+            background: rgba(139, 92, 246, 0.15);
+        }
+
+        .card-accounts-list {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            margin-top: 0.5rem;
+        }
+
+        .card-accounts-list.expanded {
+            max-height: 500px;
+        }
+
+        .card-account-item {
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-account-name {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .card-account-balance {
+            font-family: 'Space Grotesk', monospace;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -870,9 +1037,14 @@
                     <span>Аналітика рекламних кампаній</span>
                 </div>
             </div>
-            <button class="btn btn-secondary" onclick="clearCredentials()" style="padding: 0.75rem 1.5rem; font-size: 0.9rem;">
-                🚪 Вийти
-            </button>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <button class="btn btn-secondary" onclick="toggleBillingView()" id="billingToggleBtn" style="padding: 0.75rem 1.5rem; font-size: 0.9rem;">
+                    💳 Біллінг
+                </button>
+                <button class="btn btn-secondary" onclick="clearCredentials()" style="padding: 0.75rem 1.5rem; font-size: 0.9rem;">
+                    🚪 Вийти
+                </button>
+            </div>
         </header>
 
         <section class="auth-section glass">
@@ -946,6 +1118,20 @@
                         <div class="stat-label">CTR</div>
                         <div class="stat-value" id="avgCTR">0%</div>
                     </div>
+                </div>
+            </section>
+
+            <!-- Billing Section -->
+            <section class="billing-section" id="billingSection" style="display: none;">
+                <div class="section-header" style="margin-bottom: 2rem;">
+                    <h3 class="section-title">💳 Управління картами та білінг</h3>
+                    <button class="btn btn-secondary" onclick="refreshCards()" style="padding: 0.75rem 1.25rem;">
+                        🔄 Оновити
+                    </button>
+                </div>
+                
+                <div id="cardsContainer" class="cards-grid">
+                    <!-- Cards will be inserted here -->
                 </div>
             </section>
 
@@ -1100,12 +1286,16 @@
         let mainCharts = {}; // Графіки на головній
         let accountTags = {}; // {account_id: ['tag1', 'tag2']}
         let currentFilter = 'all'; // Поточний bulk фільтр
+        let cardNames = {}; // {card_last4: "Назва карти"}
+        let cardsData = []; // Дані про карти
+        let currentView = 'accounts'; // 'accounts' or 'billing'
 
         // Load saved credentials on page load
         window.addEventListener('DOMContentLoaded', () => {
             const savedToken = localStorage.getItem('fb_token');
             const savedBusinessId = localStorage.getItem('fb_business_id');
             const savedTags = localStorage.getItem('fb_account_tags');
+            const savedCardNames = localStorage.getItem('fb_card_names');
             
             if (savedToken) {
                 document.getElementById('accessToken').value = savedToken;
@@ -1122,6 +1312,14 @@
                     accountTags = JSON.parse(savedTags);
                 } catch (e) {
                     accountTags = {};
+                }
+            }
+            
+            if (savedCardNames) {
+                try {
+                    cardNames = JSON.parse(savedCardNames);
+                } catch (e) {
+                    cardNames = {};
                 }
             }
         });
@@ -1553,6 +1751,160 @@
             });
             sortData(filteredData);
             updateAccountsTable(filteredData);
+        }
+
+        // Billing Functions
+        function toggleBillingView() {
+            if (currentView === 'accounts') {
+                currentView = 'billing';
+                document.getElementById('billingSection').style.display = 'block';
+                document.querySelector('.stats-section').style.display = 'none';
+                document.querySelector('.table-section').style.display = 'none';
+                document.getElementById('billingToggleBtn').textContent = '📊 Кабінети';
+                loadCardsData();
+            } else {
+                currentView = 'accounts';
+                document.getElementById('billingSection').style.display = 'none';
+                document.querySelector('.stats-section').style.display = 'block';
+                document.querySelector('.table-section').style.display = 'block';
+                document.getElementById('billingToggleBtn').textContent = '💳 Біллінг';
+            }
+        }
+
+        async function loadCardsData() {
+            showLoading('Завантаження даних про карти...');
+            
+            try {
+                const data = await fetchAPI('/api/bm/cards', {
+                    token: currentToken,
+                    business_id: currentBusinessId
+                });
+                
+                cardsData = data.data || [];
+                renderCards();
+                hideLoading();
+            } catch (error) {
+                hideLoading();
+                showError('Помилка завантаження карт: ' + error.message);
+            }
+        }
+
+        function renderCards() {
+            const container = document.getElementById('cardsContainer');
+            
+            // Групуємо акаунти по картах
+            const cardGroups = {};
+            
+            cardsData.forEach(item => {
+                const cardKey = item.card_last4 || 'unknown';
+                if (!cardGroups[cardKey]) {
+                    cardGroups[cardKey] = {
+                        card_last4: item.card_last4,
+                        card_type: item.card_type,
+                        card_display: item.card_display,
+                        accounts: [],
+                        total_balance: 0
+                    };
+                }
+                
+                cardGroups[cardKey].accounts.push({
+                    account_id: item.account_id,
+                    account_name: item.account_name,
+                    balance: item.balance,
+                    currency: item.currency
+                });
+                
+                cardGroups[cardKey].total_balance += item.balance;
+            });
+            
+            // Рендеримо картки
+            container.innerHTML = '';
+            
+            Object.values(cardGroups).forEach(group => {
+                const cardKey = group.card_last4 || 'unknown';
+                const cardName = cardNames[cardKey] || (group.card_display || 'Невідома карта');
+                const accountCount = group.accounts.length;
+                
+                const cardHtml = `
+                    <div class="card-item glass">
+                        <div class="card-header">
+                            <div class="card-info">
+                                <div class="card-icon">💳</div>
+                                <div class="card-details">
+                                    <h4>${cardName}</h4>
+                                    <div class="card-number">${group.card_display || '•••• ••••'}</div>
+                                </div>
+                            </div>
+                            <button class="card-edit-btn" onclick="editCardName('${cardKey}')" title="Редагувати назву">
+                                ✏️
+                            </button>
+                        </div>
+                        
+                        <div class="card-stats">
+                            <div class="card-stat">
+                                <div class="card-stat-label">Кабінетів</div>
+                                <div class="card-stat-value">${accountCount}</div>
+                            </div>
+                            <div class="card-stat">
+                                <div class="card-stat-label">Баланс</div>
+                                <div class="card-stat-value ${group.total_balance > 0 ? 'negative' : 'positive'}">
+                                    ${formatCurrency(group.total_balance)}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card-accounts">
+                            <button class="card-accounts-toggle" onclick="toggleCardAccounts('${cardKey}')">
+                                <span>Показати кабінети</span>
+                                <span class="toggle-icon">▼</span>
+                            </button>
+                            <div class="card-accounts-list" id="accounts-${cardKey}">
+                                ${group.accounts.map(acc => `
+                                    <div class="card-account-item">
+                                        <span class="card-account-name">${acc.account_name}</span>
+                                        <span class="card-account-balance" style="color: ${acc.balance > 0 ? 'var(--danger)' : 'var(--success)'}">
+                                            ${formatCurrency(acc.balance, acc.currency)}
+                                        </span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.insertAdjacentHTML('beforeend', cardHtml);
+            });
+        }
+
+        function toggleCardAccounts(cardKey) {
+            const list = document.getElementById(`accounts-${cardKey}`);
+            const btn = list.previousElementSibling;
+            const icon = btn.querySelector('.toggle-icon');
+            
+            if (list.classList.contains('expanded')) {
+                list.classList.remove('expanded');
+                btn.querySelector('span:first-child').textContent = 'Показати кабінети';
+                icon.textContent = '▼';
+            } else {
+                list.classList.add('expanded');
+                btn.querySelector('span:first-child').textContent = 'Приховати кабінети';
+                icon.textContent = '▲';
+            }
+        }
+
+        function editCardName(cardKey) {
+            const currentName = cardNames[cardKey] || '';
+            const newName = prompt('Введіть назву карти (наприклад: "ПриватБанк Основна"):', currentName);
+            
+            if (newName !== null && newName.trim()) {
+                cardNames[cardKey] = newName.trim();
+                localStorage.setItem('fb_card_names', JSON.stringify(cardNames));
+                renderCards();
+            }
+        }
+
+        async function refreshCards() {
+            await loadCardsData();
         }
 
         // Tags Functions
