@@ -133,6 +133,39 @@ class FacebookAdsClient:
         
         return accounts
     
+    async def get_payment_methods(self, account_id: str):
+        """Отримати дані про платіжні методи для акаунту"""
+        if not account_id.startswith("act_"):
+            account_id = f"act_{account_id}"
+        
+        try:
+            result = await self._request(
+                account_id,
+                {"fields": "funding_source_details"}
+            )
+            
+            funding = result.get("funding_source_details", {})
+            display_string = funding.get("display_string", "")
+            
+            # Витягуємо останні 4 цифри з рядка типу "Visa ****1234"
+            card_last4 = None
+            if "****" in display_string:
+                card_last4 = display_string.split("****")[-1].strip()
+            
+            return {
+                "account_id": account_id,
+                "card_last4": card_last4,
+                "card_type": funding.get("type"),
+                "card_display": display_string,
+            }
+        except Exception as e:
+            return {
+                "account_id": account_id,
+                "card_last4": None,
+                "card_type": None,
+                "card_display": None,
+            }
+    
     async def get_account_summary(self, account_id: str, account_name: str, currency: str, date_preset: str = "last_30d", balance: float = 0):
         """Отримати зведені метрики для одного акаунта"""
         if not account_id.startswith("act_"):
@@ -415,6 +448,24 @@ async def get_bm_daily(token: str, business_id: str, date_preset: str = "last_14
     """Денна статистика"""
     client = FacebookAdsClient(token, business_id=business_id)
     return await client.get_all_accounts_daily(date_preset=date_preset)
+
+
+@app.get("/api/bm/cards")
+async def get_bm_cards(token: str, business_id: str):
+    """Отримати дані про платіжні карти всіх акаунтів"""
+    client = FacebookAdsClient(token, business_id=business_id)
+    accounts = await client.get_business_ad_accounts()
+    
+    cards_data = []
+    for acc in accounts:
+        acc_id = acc.get("id")
+        payment_info = await client.get_payment_methods(acc_id)
+        payment_info["account_name"] = acc.get("name")
+        payment_info["currency"] = acc.get("currency", "USD")
+        payment_info["balance"] = float(acc.get("balance", 0)) / 100
+        cards_data.append(payment_info)
+    
+    return {"data": cards_data}
 
 
 @app.get("/api/bm/export/csv")
