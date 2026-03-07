@@ -7,6 +7,7 @@ import csv
 import os
 from datetime import datetime
 import json
+import calendar
 
 app = FastAPI(title="Facebook Ads Dashboard")
 
@@ -466,6 +467,139 @@ async def get_bm_cards(token: str, business_id: str):
         cards_data.append(payment_info)
     
     return {"data": cards_data}
+
+
+@app.get("/api/bm/billing")
+async def get_bm_billing(token: str, business_id: str, usd_rate: float = 41.5):
+    """Біллінг: витрати по картах за поточний місяць з лімітами"""
+    client = FacebookAdsClient(token, business_id=business_id)
+    accounts = await client.get_business_ad_accounts()
+    
+    CARD_LIMIT_UAH = 100000
+    
+    # Поточна дата для розрахунку прогнозу
+    now = datetime.now()
+    day_of_month = now.day
+    days_in_month = calendar.monthrange(now.year, now.month)[1]
+    
+    cards = {}
+    
+    for acc in accounts:
+        acc_id = acc.get("id")
+        acc_name = acc.get("name", "Unknown")
+        currency = acc.get("currency", "USD")
+        balance = float(acc.get("balance", 0)) / 100
+        
+        # Отримуємо платіжний метод
+        payment_info = await client.get_payment_methods(acc_id)
+        card_key = payment_info.get("card_last4") or "unknown"
+        card_display = payment_info.get("card_display") or "Невідома карта"
+        card_type = payment_info.get("card_type")
+        
+        # Отримуємо витрати за поточний місяць
+        monthly_spend_usd = 0
+        try:
+            if not acc_id.startswith("act_"):
+                acc_id_prefixed = f"act_{acc_id}"
+            else:
+                acc_id_prefixed = acc_id
+            
+            data = await client._request(
+                f"{acc_id_prefixed}/insights",
+                {
+                    "fields": "spend",
+                    "date_preset": "this_month",
+                    "limit": 500
+                }
+            )
+            for row in data.get("data", []):
+                monthly_spend_usd += float(row.get("spend", 0))
+        except:
+            pass
+        
+        # Конвертуємо в UAH
+        monthly_spend_uah = monthly_spend_usd * usd_rate
+        
+        if card_key not in cards:
+            cards[card_key] = {
+                "card_last4": card_key,
+                "card_display": card_display,
+                "card_type": card_type,
+                "limit_uah": CARD_LIMIT_UAH,
+                "total_spend_usd": 0,
+                "total_spend_uah": 0,
+                "total_balance": 0,
+                "accounts": [],
+                "percent_used": 0,
+                "forecast_uah": 0,
+                "forecast_usd": 0,
+                "status": "ok",
+                "days_until_limit": None
+            }
+        
+        cards[card_key]["total_spend_usd"] += monthly_spend_usd
+        cards[card_key]["total_spend_uah"] += monthly_spend_uah
+        cards[card_key]["total_balance"] += balance
+        cards[card_key]["accounts"].append({
+            "account_id": acc_id,
+            "account_name": acc_name,
+            "currency": currency,
+            "balance": balance,
+            "monthly_spend_usd": round(monthly_spend_usd, 2),
+            "monthly_spend_uah": round(monthly_spend_uah, 2)
+        })
+    
+    # Розраховуємо відсотки, прогноз та статуси
+    result = []
+    for card_key, card in cards.items():
+        spend_uah = card["total_spend_uah"]
+        limit = card["limit_uah"]
+        
+        # Відсоток використання
+        percent = (spend_uah / limit * 100) if limit > 0 else 0
+        card["percent_used"] = round(percent, 1)
+        
+        # Прогноз на кінець місяця
+        if day_of_month > 0:
+            daily_avg_uah = spend_uah / day_of_month
+            card["forecast_uah"] = round(daily_avg_uah * days_in_month, 2)
+            card["forecast_usd"] = round(card["forecast_uah"] / usd_rate, 2) if usd_rate > 0 else 0
+            
+            # Днів до ліміту при поточному темпі
+            if daily_avg_uah > 0:
+                remaining_uah = limit - spend_uah
+                card["days_until_limit"] = max(0, round(remaining_uah / daily_avg_uah, 1))
+        
+        # Статус
+        if percent >= 100:
+            card["status"] = "exceeded"
+        elif percent >= 90:
+            card["status"] = "critical"
+        elif percent >= 70:
+            card["status"] = "warning"
+        else:
+            card["status"] = "ok"
+        
+        # Округлення
+        card["total_spend_usd"] = round(card["total_spend_usd"], 2)
+        card["total_spend_uah"] = round(card["total_spend_uah"], 2)
+        card["total_balance"] = round(card["total_balance"], 2)
+        
+        result.append(card)
+    
+    # Сортуємо: критичні зверху
+    status_order = {"exceeded": 0, "critical": 1, "warning": 2, "ok": 3}
+    result.sort(key=lambda x: (status_order.get(x["status"], 99), -x["percent_used"]))
+    
+    return {
+        "data": result,
+        "meta": {
+            "usd_rate": usd_rate,
+            "card_limit_uah": CARD_LIMIT_UAH,
+            "current_day": day_of_month,
+            "days_in_month": days_in_month
+        }
+    }
 
 
 @app.get("/api/bm/export/csv")
