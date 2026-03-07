@@ -1940,6 +1940,9 @@
         let billingData = null;
 
         function toggleBillingView() {
+            // Переконуємось що dashboard видимий
+            document.getElementById('dashboard').classList.add('active');
+            
             if (currentView === 'accounts') {
                 currentView = 'billing';
                 document.getElementById('billingSection').style.display = 'block';
@@ -1957,9 +1960,18 @@
         }
 
         async function loadBillingData() {
-            showLoading('Завантаження біллінг-даних по картах...');
-            
             const usdRate = parseFloat(document.getElementById('usdRateInput').value) || 41.5;
+            
+            // Показуємо лоадер всередині секції, не ховаючи весь dashboard
+            const container = document.getElementById('billingCardsContainer');
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; padding: 4rem 2rem; gap: 1rem;">
+                    <div class="spinner"></div>
+                    <p style="color: var(--text-secondary);">Завантаження біллінг-даних...</p>
+                </div>
+            `;
+            document.getElementById('billingAlerts').innerHTML = '';
+            document.getElementById('billingSummary').innerHTML = '';
             
             try {
                 const data = await fetchAPI('/api/bm/billing', {
@@ -1972,11 +1984,16 @@
                 renderBillingAlerts(data.data || []);
                 renderBillingSummary(data.data || [], data.meta || {});
                 renderBillingCards(data.data || [], data.meta || {});
-                hideLoading();
-                showDashboard();
             } catch (error) {
-                hideLoading();
-                showError('Помилка завантаження біллінгу: ' + error.message);
+                container.innerHTML = `
+                    <div style="grid-column: 1 / -1; padding: 3rem; text-align: center;">
+                        <p style="color: var(--danger); font-size: 1.1rem; margin-bottom: 1rem;">⚠️ ${error.message}</p>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Перевірте що на сервері оновлений main.py з ендпоінтом /api/bm/billing</p>
+                        <button class="btn btn-secondary" onclick="loadBillingData()" style="margin-top: 1rem; padding: 0.75rem 1.5rem;">
+                            🔄 Спробувати знову
+                        </button>
+                    </div>
+                `;
             }
         }
 
