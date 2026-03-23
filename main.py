@@ -7,6 +7,7 @@ import csv
 import os
 from datetime import datetime
 import json
+import calendar
 
 app = FastAPI(title="Facebook Ads Dashboard")
 
@@ -141,20 +142,16 @@ class FacebookAdsClient:
         try:
             result = await self._request(
                 account_id,
-                {"fields": "funding_source_details,funding_source"}
+                {"fields": "funding_source_details"}
             )
             
             funding = result.get("funding_source_details", {})
             display_string = funding.get("display_string", "")
-            funding_source_id = result.get("funding_source")
             
-            # Витягуємо останні 4 цифри — підтримка різних форматів:
-            # "VISA *9289", "Visa ****1234", "MasterCard *3277"
+            # Витягуємо останні 4 цифри — формати: "VISA *9289", "Mastercard *3277", "Visa ****1234"
             card_last4 = None
             if "*" in display_string:
-                # Беремо все після останньої зірочки
                 after_star = display_string.split("*")[-1].strip()
-                # Витягуємо тільки цифри
                 digits = ''.join(c for c in after_star if c.isdigit())
                 if len(digits) >= 4:
                     card_last4 = digits[-4:]
@@ -164,7 +161,6 @@ class FacebookAdsClient:
                 "card_last4": card_last4,
                 "card_type": funding.get("type"),
                 "card_display": display_string,
-                "funding_source_id": str(funding_source_id) if funding_source_id else None,
             }
         except Exception as e:
             return {
@@ -172,7 +168,6 @@ class FacebookAdsClient:
                 "card_last4": None,
                 "card_type": None,
                 "card_display": None,
-                "funding_source_id": None,
             }
     
     async def get_account_summary(self, account_id: str, account_name: str, currency: str, date_preset: str = "last_30d", balance: float = 0):
@@ -477,112 +472,125 @@ async def get_bm_cards(token: str, business_id: str):
     return {"data": cards_data}
 
 
-@app.get("/api/bm/billing/debug")
-async def get_bm_billing_debug(token: str, business_id: str):
-    """ДІАГНОСТИКА: сирі дані API по кожному акаунту — funding_source_details, funding_source, spend this_month"""
+@app.get("/api/bm/billing")
+async def get_bm_billing(token: str, business_id: str, usd_rate: float = 41.5):
+    """Біллінг: витрати по картах за поточний місяць з лімітами"""
     client = FacebookAdsClient(token, business_id=business_id)
     accounts = await client.get_business_ad_accounts()
     
-    results = []
+    CARD_LIMIT_UAH = 100000
+    now = datetime.now()
+    day_of_month = now.day
+    days_in_month = calendar.monthrange(now.year, now.month)[1]
+    
+    cards = {}
     
     for acc in accounts:
         acc_id = acc.get("id")
         acc_name = acc.get("name", "Unknown")
+        currency = acc.get("currency", "USD")
+        balance = float(acc.get("balance", 0)) / 100
         
         if not acc_id.startswith("act_"):
             acc_id_prefixed = f"act_{acc_id}"
         else:
             acc_id_prefixed = acc_id
         
-        entry = {
-            "account_id": acc_id,
-            "account_name": acc_name,
-            "currency": acc.get("currency", "USD"),
-            "balance_raw": acc.get("balance"),
-            "account_status": acc.get("account_status"),
-            "funding_source_details": None,
-            "funding_source_details_error": None,
-            "funding_source_id": None,
-            "funding_source_lookup": None,
-            "funding_source_lookup_error": None,
-            "spend_this_month": None,
-            "spend_error": None,
-        }
+        # Карта з API
+        payment_info = await client.get_payment_methods(acc_id)
+        card_last4 = payment_info.get("card_last4") or "unknown"
+        card_display = payment_info.get("card_display") or ""
         
-        # 1) funding_source_details + funding_source
+        # Витрати за поточний місяць
+        monthly_spend = 0
         try:
-            raw = await client._request(
-                acc_id_prefixed,
-                {"fields": "funding_source_details,funding_source"}
-            )
-            entry["funding_source_details"] = raw.get("funding_source_details")
-            entry["funding_source_id"] = raw.get("funding_source")
-        except Exception as e:
-            entry["funding_source_details_error"] = str(e)
-        
-        # 2) Якщо є funding_source ID — пробуємо окремий запит
-        if entry["funding_source_id"]:
-            try:
-                fs_data = await client._request(
-                    str(entry["funding_source_id"]),
-                    {"fields": "display_string,type,id"}
-                )
-                entry["funding_source_lookup"] = fs_data
-            except Exception as e:
-                entry["funding_source_lookup_error"] = str(e)
-        
-        # 3) spend за this_month
-        try:
-            spend_data = await client._request(
+            data = await client._request(
                 f"{acc_id_prefixed}/insights",
                 {"fields": "spend", "date_preset": "this_month", "limit": 500}
             )
-            total_spend = 0
-            for row in spend_data.get("data", []):
-                total_spend += float(row.get("spend", 0))
-            entry["spend_this_month"] = round(total_spend, 2)
-        except Exception as e:
-            entry["spend_error"] = str(e)
+            for row in data.get("data", []):
+                monthly_spend += float(row.get("spend", 0))
+        except:
+            pass
         
-        results.append(entry)
+        spend_uah = monthly_spend * usd_rate
+        
+        if card_last4 not in cards:
+            cards[card_last4] = {
+                "card_last4": card_last4,
+                "card_display": card_display,
+                "limit_uah": CARD_LIMIT_UAH,
+                "total_spend_usd": 0,
+                "total_spend_uah": 0,
+                "total_balance": 0,
+                "accounts": [],
+            }
+        
+        if card_display and not cards[card_last4]["card_display"]:
+            cards[card_last4]["card_display"] = card_display
+        
+        cards[card_last4]["total_spend_usd"] += monthly_spend
+        cards[card_last4]["total_spend_uah"] += spend_uah
+        cards[card_last4]["total_balance"] += balance
+        cards[card_last4]["accounts"].append({
+            "account_id": acc_id,
+            "account_name": acc_name,
+            "balance": round(balance, 2),
+            "spend_usd": round(monthly_spend, 2),
+            "spend_uah": round(spend_uah, 2),
+        })
     
-    # Допоміжна функція для витягування last4
-    def extract_last4(display_str):
-        if not display_str or "*" not in display_str:
-            return None
-        after_star = display_str.split("*")[-1].strip()
-        digits = ''.join(c for c in after_star if c.isdigit())
-        return digits[-4:] if len(digits) >= 4 else None
-    
-    # Саммарі
-    cards_found = {}
-    no_card = []
-    for r in results:
-        fsd = r.get("funding_source_details") or {}
-        display = fsd.get("display_string", "")
+    # Розрахунки по кожній карті
+    result = []
+    for card in cards.values():
+        spend_uah = card["total_spend_uah"]
+        limit = card["limit_uah"]
+        percent = (spend_uah / limit * 100) if limit > 0 else 0
         
-        card_last4 = extract_last4(display)
+        forecast_uah = 0
+        forecast_usd = 0
+        days_until_limit = None
         
-        # Fallback — з funding_source_lookup
-        if not card_last4 and r.get("funding_source_lookup"):
-            fs_display = r["funding_source_lookup"].get("display_string", "")
-            card_last4 = extract_last4(fs_display)
-            if card_last4:
-                display = fs_display
+        if day_of_month > 0:
+            daily_avg = spend_uah / day_of_month
+            forecast_uah = round(daily_avg * days_in_month, 2)
+            forecast_usd = round(forecast_uah / usd_rate, 2) if usd_rate > 0 else 0
+            if daily_avg > 0:
+                remaining = limit - spend_uah
+                days_until_limit = max(0, round(remaining / daily_avg, 1))
         
-        if card_last4:
-            if card_last4 not in cards_found:
-                cards_found[card_last4] = {"card": display, "accounts": []}
-            cards_found[card_last4]["accounts"].append(r["account_name"])
+        if percent >= 100:
+            status = "exceeded"
+        elif percent >= 90:
+            status = "critical"
+        elif percent >= 70:
+            status = "warning"
         else:
-            no_card.append(r["account_name"])
+            status = "ok"
+        
+        card["total_spend_usd"] = round(card["total_spend_usd"], 2)
+        card["total_spend_uah"] = round(card["total_spend_uah"], 2)
+        card["total_balance"] = round(card["total_balance"], 2)
+        card["percent_used"] = round(percent, 1)
+        card["forecast_uah"] = forecast_uah
+        card["forecast_usd"] = forecast_usd
+        card["days_until_limit"] = days_until_limit
+        card["status"] = status
+        
+        result.append(card)
+    
+    status_order = {"exceeded": 0, "critical": 1, "warning": 2, "ok": 3}
+    result.sort(key=lambda x: (status_order.get(x["status"], 99), -x["percent_used"]))
     
     return {
-        "total_accounts": len(results),
-        "cards_detected": {k: {"display": v["card"], "count": len(v["accounts"]), "accounts": v["accounts"]} for k, v in cards_found.items()},
-        "no_card_detected": no_card,
-        "no_card_count": len(no_card),
-        "raw_data": results
+        "data": result,
+        "meta": {
+            "usd_rate": usd_rate,
+            "card_limit_uah": CARD_LIMIT_UAH,
+            "current_day": day_of_month,
+            "days_in_month": days_in_month,
+            "total_accounts": len(accounts),
+        }
     }
 
 
