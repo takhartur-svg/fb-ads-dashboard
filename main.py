@@ -141,22 +141,30 @@ class FacebookAdsClient:
         try:
             result = await self._request(
                 account_id,
-                {"fields": "funding_source_details"}
+                {"fields": "funding_source_details,funding_source"}
             )
             
             funding = result.get("funding_source_details", {})
             display_string = funding.get("display_string", "")
+            funding_source_id = result.get("funding_source")
             
-            # Витягуємо останні 4 цифри з рядка типу "Visa ****1234"
+            # Витягуємо останні 4 цифри — підтримка різних форматів:
+            # "VISA *9289", "Visa ****1234", "MasterCard *3277"
             card_last4 = None
-            if "****" in display_string:
-                card_last4 = display_string.split("****")[-1].strip()
+            if "*" in display_string:
+                # Беремо все після останньої зірочки
+                after_star = display_string.split("*")[-1].strip()
+                # Витягуємо тільки цифри
+                digits = ''.join(c for c in after_star if c.isdigit())
+                if len(digits) >= 4:
+                    card_last4 = digits[-4:]
             
             return {
                 "account_id": account_id,
                 "card_last4": card_last4,
                 "card_type": funding.get("type"),
                 "card_display": display_string,
+                "funding_source_id": str(funding_source_id) if funding_source_id else None,
             }
         except Exception as e:
             return {
@@ -164,6 +172,7 @@ class FacebookAdsClient:
                 "card_last4": None,
                 "card_type": None,
                 "card_display": None,
+                "funding_source_id": None,
             }
     
     async def get_account_summary(self, account_id: str, account_name: str, currency: str, date_preset: str = "last_30d", balance: float = 0):
@@ -537,6 +546,14 @@ async def get_bm_billing_debug(token: str, business_id: str):
         
         results.append(entry)
     
+    # Допоміжна функція для витягування last4
+    def extract_last4(display_str):
+        if not display_str or "*" not in display_str:
+            return None
+        after_star = display_str.split("*")[-1].strip()
+        digits = ''.join(c for c in after_star if c.isdigit())
+        return digits[-4:] if len(digits) >= 4 else None
+    
     # Саммарі
     cards_found = {}
     no_card = []
@@ -544,19 +561,18 @@ async def get_bm_billing_debug(token: str, business_id: str):
         fsd = r.get("funding_source_details") or {}
         display = fsd.get("display_string", "")
         
-        card_last4 = None
-        if "****" in display:
-            card_last4 = display.split("****")[-1].strip()
+        card_last4 = extract_last4(display)
         
         # Fallback — з funding_source_lookup
         if not card_last4 and r.get("funding_source_lookup"):
             fs_display = r["funding_source_lookup"].get("display_string", "")
-            if "****" in fs_display:
-                card_last4 = fs_display.split("****")[-1].strip()
+            card_last4 = extract_last4(fs_display)
+            if card_last4:
+                display = fs_display
         
         if card_last4:
             if card_last4 not in cards_found:
-                cards_found[card_last4] = {"card": display or fs_display, "accounts": []}
+                cards_found[card_last4] = {"card": display, "accounts": []}
             cards_found[card_last4]["accounts"].append(r["account_name"])
         else:
             no_card.append(r["account_name"])
