@@ -1844,8 +1844,8 @@
 
         function renderBillingSummary(cards, meta) {
             const el = document.getElementById('billingSummary');
-            const totalUAH = cards.reduce((s, c) => s + c.total_spend_uah, 0);
-            const totalUSD = cards.reduce((s, c) => s + c.total_spend_usd, 0);
+            const totalUAH = cards.reduce((s, c) => s + (c.total_spend_uah || 0), 0);
+            const totalUSD = cards.reduce((s, c) => s + (c.total_spend_usd || 0), 0);
             const critical = cards.filter(c => c.status === 'critical' || c.status === 'exceeded').length;
             el.innerHTML = `
                 <div class="billing-summary-card"><div class="billing-summary-label">Карт</div><div class="billing-summary-value" style="color:var(--text-primary)">${cards.length}</div></div>
@@ -1863,24 +1863,30 @@
             cards.forEach(card => {
                 const key = card.card_last4 || 'unknown';
                 const name = cardNames[key] || card.card_display || '•••• ' + key;
-                const pct = Math.min(card.percent_used, 100);
-                const remUAH = Math.max(0, card.limit_uah - card.total_spend_uah);
+                const pct = Math.min(card.percent_used || 0, 100);
+                const spendUAH = card.total_spend_uah || 0;
+                const spendUSD = card.total_spend_usd || 0;
+                const limitUAH = card.limit_uah || 100000;
+                const remUAH = Math.max(0, limitUAH - spendUAH);
                 const remUSD = remUAH / usdRate;
+                const bal = card.total_balance || 0;
+                const forecastUAH = card.forecast_uah || 0;
+                const forecastUSD = card.forecast_usd || 0;
                 const isBad = card.status === 'critical' || card.status === 'exceeded';
                 
                 let badge = '';
                 if (card.status === 'exceeded') badge = '<span class="billing-days-badge exceeded">🚨 Ліміт вичерпано</span>';
-                else if (card.days_until_limit !== null) {
+                else if (card.days_until_limit !== null && card.days_until_limit !== undefined) {
                     const cls = card.days_until_limit <= 3 ? 'critical' : card.days_until_limit <= 7 ? 'warning' : 'ok';
                     badge = '<span class="billing-days-badge ' + cls + '">⏳ ~' + card.days_until_limit + ' днів</span>';
                 }
                 
-                const accs = card.accounts.map(a => `
+                const accs = (card.accounts || []).map(a => `
                     <div class="card-account-item">
-                        <span class="card-account-name">${a.account_name}</span>
+                        <span class="card-account-name">${a.account_name || 'Unknown'}</span>
                         <div style="text-align:right">
-                            <div style="color:var(--accent);font-family:'Space Grotesk',monospace;font-size:0.85rem;font-weight:600">${formatUAH(a.spend_uah)}</div>
-                            <div style="font-size:0.75rem;color:var(--text-muted)">$${a.spend_usd.toFixed(2)}</div>
+                            <div style="color:var(--accent);font-family:'Space Grotesk',monospace;font-size:0.85rem;font-weight:600">${formatUAH(a.spend_uah || 0)}</div>
+                            <div style="font-size:0.75rem;color:var(--text-muted)">$${(a.spend_usd || 0).toFixed(2)}</div>
                         </div>
                     </div>
                 `).join('');
@@ -1892,7 +1898,7 @@
                                 <div class="card-icon" style="${isBad ? 'background:linear-gradient(135deg,#ef4444,#dc2626)' : ''}">💳</div>
                                 <div class="card-details">
                                     <h4>${name}</h4>
-                                    <div class="card-number">${card.card_display || '••••'} · ${card.accounts.length} кабінетів</div>
+                                    <div class="card-number">${card.card_display || '••••'} · ${(card.accounts || []).length} кабінетів</div>
                                 </div>
                             </div>
                             <div style="display:flex;align-items:center;gap:0.5rem">
@@ -1903,12 +1909,12 @@
                         
                         <div style="margin:1rem 0">
                             <div class="billing-progress-bar">
-                                <div class="billing-progress-fill status-${card.status}" style="width:${pct}%"></div>
+                                <div class="billing-progress-fill status-${card.status || 'ok'}" style="width:${pct}%"></div>
                             </div>
                             <div class="billing-progress-labels">
-                                <span>${formatUAH(card.total_spend_uah)} ($${card.total_spend_usd.toFixed(2)})</span>
-                                <span style="font-weight:600;color:${card.percent_used >= 90 ? 'var(--danger)' : 'var(--text-secondary)'}">${card.percent_used}%</span>
-                                <span>${formatUAH(card.limit_uah)}</span>
+                                <span>${formatUAH(spendUAH)} ($${spendUSD.toFixed(2)})</span>
+                                <span style="font-weight:600;color:${(card.percent_used || 0) >= 90 ? 'var(--danger)' : 'var(--text-secondary)'}">${(card.percent_used || 0).toFixed(1)}%</span>
+                                <span>${formatUAH(limitUAH)}</span>
                             </div>
                         </div>
                         
@@ -1920,20 +1926,20 @@
                             </div>
                             <div class="card-stat">
                                 <div class="card-stat-label">Борг</div>
-                                <div class="card-stat-value ${card.total_balance > 0 ? 'negative' : 'positive'}">$${Math.abs(card.total_balance).toFixed(2)}</div>
+                                <div class="card-stat-value ${bal > 0 ? 'negative' : 'positive'}">$${Math.abs(bal).toFixed(2)}</div>
                             </div>
                         </div>
                         
                         <div style="margin-top:1rem;padding:0.75rem 1rem;background:rgba(255,255,255,0.03);border-radius:10px;display:flex;justify-content:space-between;align-items:center">
-                            <span style="font-size:0.8rem;color:var(--text-muted)">📊 Прогноз на кінець місяця:</span>
-                            <span style="font-family:'Space Grotesk',monospace;font-size:0.95rem;font-weight:600;color:${card.forecast_uah > card.limit_uah ? 'var(--danger)' : 'var(--success)'}">
-                                ${formatUAH(card.forecast_uah)} ($${card.forecast_usd.toFixed(2)}) ${card.forecast_uah > card.limit_uah ? '⚠️' : '✅'}
+                            <span style="font-size:0.8rem;color:var(--text-muted)">📊 Прогноз:</span>
+                            <span style="font-family:'Space Grotesk',monospace;font-size:0.95rem;font-weight:600;color:${forecastUAH > limitUAH ? 'var(--danger)' : 'var(--success)'}">
+                                ${formatUAH(forecastUAH)} ($${forecastUSD.toFixed(2)}) ${forecastUAH > limitUAH ? '⚠️' : '✅'}
                             </span>
                         </div>
                         
                         <div class="card-accounts" style="margin-top:1rem">
                             <button class="card-accounts-toggle" onclick="toggleCardAccounts('${key}')">
-                                <span>Кабінети (${card.accounts.length})</span>
+                                <span>Кабінети (${(card.accounts || []).length})</span>
                                 <span class="toggle-icon">▼</span>
                             </button>
                             <div class="card-accounts-list" id="accounts-${key}">${accs}</div>
