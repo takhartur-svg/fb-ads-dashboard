@@ -7,7 +7,6 @@ import csv
 import os
 from datetime import datetime
 import json
-import calendar
 
 app = FastAPI(title="Facebook Ads Dashboard")
 
@@ -469,136 +468,105 @@ async def get_bm_cards(token: str, business_id: str):
     return {"data": cards_data}
 
 
-@app.get("/api/bm/billing")
-async def get_bm_billing(token: str, business_id: str, usd_rate: float = 41.5):
-    """Біллінг: витрати по картах за поточний місяць з лімітами"""
+@app.get("/api/bm/billing/debug")
+async def get_bm_billing_debug(token: str, business_id: str):
+    """ДІАГНОСТИКА: сирі дані API по кожному акаунту — funding_source_details, funding_source, spend this_month"""
     client = FacebookAdsClient(token, business_id=business_id)
     accounts = await client.get_business_ad_accounts()
     
-    CARD_LIMIT_UAH = 100000
-    
-    # Поточна дата для розрахунку прогнозу
-    now = datetime.now()
-    day_of_month = now.day
-    days_in_month = calendar.monthrange(now.year, now.month)[1]
-    
-    cards = {}
+    results = []
     
     for acc in accounts:
         acc_id = acc.get("id")
         acc_name = acc.get("name", "Unknown")
-        currency = acc.get("currency", "USD")
-        balance = float(acc.get("balance", 0)) / 100
         
-        # Отримуємо платіжний метод
-        payment_info = await client.get_payment_methods(acc_id)
-        card_key = payment_info.get("card_last4") or "unknown"
-        card_display = payment_info.get("card_display") or "Невідома карта"
-        card_type = payment_info.get("card_type")
+        if not acc_id.startswith("act_"):
+            acc_id_prefixed = f"act_{acc_id}"
+        else:
+            acc_id_prefixed = acc_id
         
-        # Отримуємо витрати за поточний місяць
-        monthly_spend_usd = 0
-        try:
-            if not acc_id.startswith("act_"):
-                acc_id_prefixed = f"act_{acc_id}"
-            else:
-                acc_id_prefixed = acc_id
-            
-            data = await client._request(
-                f"{acc_id_prefixed}/insights",
-                {
-                    "fields": "spend",
-                    "date_preset": "this_month",
-                    "limit": 500
-                }
-            )
-            for row in data.get("data", []):
-                monthly_spend_usd += float(row.get("spend", 0))
-        except:
-            pass
-        
-        # Конвертуємо в UAH
-        monthly_spend_uah = monthly_spend_usd * usd_rate
-        
-        if card_key not in cards:
-            cards[card_key] = {
-                "card_last4": card_key,
-                "card_display": card_display,
-                "card_type": card_type,
-                "limit_uah": CARD_LIMIT_UAH,
-                "total_spend_usd": 0,
-                "total_spend_uah": 0,
-                "total_balance": 0,
-                "accounts": [],
-                "percent_used": 0,
-                "forecast_uah": 0,
-                "forecast_usd": 0,
-                "status": "ok",
-                "days_until_limit": None
-            }
-        
-        cards[card_key]["total_spend_usd"] += monthly_spend_usd
-        cards[card_key]["total_spend_uah"] += monthly_spend_uah
-        cards[card_key]["total_balance"] += balance
-        cards[card_key]["accounts"].append({
+        entry = {
             "account_id": acc_id,
             "account_name": acc_name,
-            "currency": currency,
-            "balance": balance,
-            "monthly_spend_usd": round(monthly_spend_usd, 2),
-            "monthly_spend_uah": round(monthly_spend_uah, 2)
-        })
+            "currency": acc.get("currency", "USD"),
+            "balance_raw": acc.get("balance"),
+            "account_status": acc.get("account_status"),
+            "funding_source_details": None,
+            "funding_source_details_error": None,
+            "funding_source_id": None,
+            "funding_source_lookup": None,
+            "funding_source_lookup_error": None,
+            "spend_this_month": None,
+            "spend_error": None,
+        }
+        
+        # 1) funding_source_details + funding_source
+        try:
+            raw = await client._request(
+                acc_id_prefixed,
+                {"fields": "funding_source_details,funding_source"}
+            )
+            entry["funding_source_details"] = raw.get("funding_source_details")
+            entry["funding_source_id"] = raw.get("funding_source")
+        except Exception as e:
+            entry["funding_source_details_error"] = str(e)
+        
+        # 2) Якщо є funding_source ID — пробуємо окремий запит
+        if entry["funding_source_id"]:
+            try:
+                fs_data = await client._request(
+                    str(entry["funding_source_id"]),
+                    {"fields": "display_string,type,id"}
+                )
+                entry["funding_source_lookup"] = fs_data
+            except Exception as e:
+                entry["funding_source_lookup_error"] = str(e)
+        
+        # 3) spend за this_month
+        try:
+            spend_data = await client._request(
+                f"{acc_id_prefixed}/insights",
+                {"fields": "spend", "date_preset": "this_month", "limit": 500}
+            )
+            total_spend = 0
+            for row in spend_data.get("data", []):
+                total_spend += float(row.get("spend", 0))
+            entry["spend_this_month"] = round(total_spend, 2)
+        except Exception as e:
+            entry["spend_error"] = str(e)
+        
+        results.append(entry)
     
-    # Розраховуємо відсотки, прогноз та статуси
-    result = []
-    for card_key, card in cards.items():
-        spend_uah = card["total_spend_uah"]
-        limit = card["limit_uah"]
+    # Саммарі
+    cards_found = {}
+    no_card = []
+    for r in results:
+        fsd = r.get("funding_source_details") or {}
+        display = fsd.get("display_string", "")
         
-        # Відсоток використання
-        percent = (spend_uah / limit * 100) if limit > 0 else 0
-        card["percent_used"] = round(percent, 1)
+        card_last4 = None
+        if "****" in display:
+            card_last4 = display.split("****")[-1].strip()
         
-        # Прогноз на кінець місяця
-        if day_of_month > 0:
-            daily_avg_uah = spend_uah / day_of_month
-            card["forecast_uah"] = round(daily_avg_uah * days_in_month, 2)
-            card["forecast_usd"] = round(card["forecast_uah"] / usd_rate, 2) if usd_rate > 0 else 0
-            
-            # Днів до ліміту при поточному темпі
-            if daily_avg_uah > 0:
-                remaining_uah = limit - spend_uah
-                card["days_until_limit"] = max(0, round(remaining_uah / daily_avg_uah, 1))
+        # Fallback — з funding_source_lookup
+        if not card_last4 and r.get("funding_source_lookup"):
+            fs_display = r["funding_source_lookup"].get("display_string", "")
+            if "****" in fs_display:
+                card_last4 = fs_display.split("****")[-1].strip()
         
-        # Статус
-        if percent >= 100:
-            card["status"] = "exceeded"
-        elif percent >= 90:
-            card["status"] = "critical"
-        elif percent >= 70:
-            card["status"] = "warning"
+        if card_last4:
+            if card_last4 not in cards_found:
+                cards_found[card_last4] = {"card": display or fs_display, "accounts": []}
+            cards_found[card_last4]["accounts"].append(r["account_name"])
         else:
-            card["status"] = "ok"
-        
-        # Округлення
-        card["total_spend_usd"] = round(card["total_spend_usd"], 2)
-        card["total_spend_uah"] = round(card["total_spend_uah"], 2)
-        card["total_balance"] = round(card["total_balance"], 2)
-        
-        result.append(card)
-    
-    # Сортуємо: критичні зверху
-    status_order = {"exceeded": 0, "critical": 1, "warning": 2, "ok": 3}
-    result.sort(key=lambda x: (status_order.get(x["status"], 99), -x["percent_used"]))
+            no_card.append(r["account_name"])
     
     return {
-        "data": result,
-        "meta": {
-            "usd_rate": usd_rate,
-            "card_limit_uah": CARD_LIMIT_UAH,
-            "current_day": day_of_month,
-            "days_in_month": days_in_month
-        }
+        "total_accounts": len(results),
+        "cards_detected": {k: {"display": v["card"], "count": len(v["accounts"]), "accounts": v["accounts"]} for k, v in cards_found.items()},
+        "no_card_detected": no_card,
+        "no_card_count": len(no_card),
+        "raw_data": results
     }
 
 
